@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/restsend/rabbit"
+	"github.com/szluyu99/rabbit"
 )
 
 var fileMode os.FileMode = 0666

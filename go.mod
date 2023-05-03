@@ -1,4 +1,4 @@
-module github.com/restsend/rabbit
+module github.com/szluyu99/rabbit
 
 go 1.20
 
