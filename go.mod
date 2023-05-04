@@ -8,7 +8,7 @@ require (
 	github.com/mattn/go-isatty v0.0.17
 	github.com/stretchr/testify v1.8.2
 	gorm.io/driver/mysql v1.5.0
-	gorm.io/driver/sqlite v1.5.0
+	gorm.io/driver/sqlite v1.4.4
 	gorm.io/gorm v1.25.0
 )
 
