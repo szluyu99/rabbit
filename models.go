@@ -77,7 +77,7 @@ type User struct {
 }
 
 type Group struct {
-	ID        uint      `json:"-" gorm:"primarykey"`
+	ID        uint      `json:"id" gorm:"primarykey"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 
@@ -88,7 +88,7 @@ type Group struct {
 }
 
 type Role struct {
-	ID        uint      `json:"-" gorm:"primarykey"`
+	ID        uint      `json:"id" gorm:"primarykey"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 
@@ -100,7 +100,7 @@ type Role struct {
 }
 
 type Permission struct {
-	ID        uint      `json:"-" gorm:"primarykey"`
+	ID        uint      `json:"id" gorm:"primarykey"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 
