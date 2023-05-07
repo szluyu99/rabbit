@@ -61,10 +61,10 @@ type User struct {
 	DisplayName string     `json:"displayName,omitempty" gorm:"size:128"`
 	IsSuperUser bool       `json:"-"`
 	IsStaff     bool       `json:"-"`
-	Enabled     bool       `json:"-"`
-	Activated   bool       `json:"-"`
+	Enabled     bool       `json:"enabled"`
+	Activated   bool       `json:"activated"`
 	LastLogin   *time.Time `json:"lastLogin,omitempty"`
-	LastLoginIP string     `json:"-" gorm:"size:128"`
+	LastLoginIP string     `json:"lastLoginIP" gorm:"size:128"`
 
 	Source    string   `json:"-" gorm:"size:64;index"`
 	Locale    string   `json:"locale,omitempty" gorm:"size:20"`
