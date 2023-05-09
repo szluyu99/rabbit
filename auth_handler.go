@@ -84,6 +84,7 @@ func handleUserSignin(c *gin.Context) {
 	var user *User
 	var err error
 
+	// use password login or token login
 	if form.Password != "" {
 		user, err = GetUserByEmail(db, form.Email)
 		if err != nil {
