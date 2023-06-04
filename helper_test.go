@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 type testMapForm struct {
@@ -118,4 +119,70 @@ func TestGet(t *testing.T) {
 		assert.Nil(t, err)
 		assert.NotNil(t, val)
 	}
+}
+
+func TestGetColumnName(t *testing.T) {
+	db, _ := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{SkipDefaultTransaction: true})
+	db.AutoMigrate(user{}, product{})
+
+	type test struct {
+		UUID      uint `gorm:"primarykey"`
+		Name      string
+		CreatedAt time.Time
+		AName     string `gorm:"column:a_n"`
+		BName     string
+	}
+
+	assert.Equal(t, "uuid", GetColumnNameByField[test]("UUID"))
+	assert.Equal(t, "created_at", GetColumnNameByField[test]("CreatedAt"))
+	assert.Equal(t, "a_n", GetColumnNameByField[test]("AName"))
+	assert.Equal(t, "b_name", GetColumnNameByField[test]("BName"))
+
+	assert.Equal(t, "uuid", GetPkColumnName[test]())
+}
+
+func TestGetFieldNameByJSONTag(t *testing.T) {
+	type test struct {
+		UUID      uint      `json:"id"`
+		Name      string    `json:"name"`
+		CreatedAt time.Time `json:"createdAt"`
+	}
+
+	assert.Equal(t, "UUID", GetFieldNameByJsonTag[test]("id"))
+	assert.Equal(t, "Name", GetFieldNameByJsonTag[test]("name"))
+	assert.Equal(t, "CreatedAt", GetFieldNameByJsonTag[test]("createdAt"))
+}
+
+func TestGetTableName(t *testing.T) {
+
+	type test struct {
+		UUID      uint      `json:"id"`
+		Name      string    `json:"name"`
+		CreatedAt time.Time `json:"createdAt"`
+	}
+
+	{
+		db, _ := gorm.Open(sqlite.Open("file::memory:"), nil)
+		tblName := GetTableName[test](db)
+		assert.Equal(t, "tests", tblName)
+	}
+	{
+		db, _ := gorm.Open(sqlite.Open("file::memory:"),
+			&gorm.Config{NamingStrategy: schema.NamingStrategy{SingularTable: true}},
+		)
+		tblName := GetTableName[test](db)
+		assert.Equal(t, "test", tblName)
+	}
+}
+
+func TestGetPkJsonName(t *testing.T) {
+	type test1 struct {
+		UUID uint `json:"id" gorm:"primaryKey"`
+	}
+	assert.Equal(t, "id", GetPkJsonName[test1]())
+
+	type test2 struct {
+		UUID uint `gorm:"primaryKey"`
+	}
+	assert.Equal(t, "UUID", GetPkJsonName[test2]())
 }

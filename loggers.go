@@ -47,7 +47,7 @@ func colorLevel(level int) string {
 	case LevelError:
 		return colorize(red, "ERROR")
 	default:
-		return colorize(white, "?")
+		return colorize(white, "???")
 	}
 }
 
@@ -62,25 +62,49 @@ func SetLogLevel(level int) {
 	}
 }
 
-func Debug(v ...any) {
+func Debugf(format string, v ...any) {
+	if LogLevel <= LevelDebug {
+		log.Default().Output(2, fmt.Sprintf("[%s] %v", colorLevel(LevelDebug), fmt.Sprintf(format, v...)))
+	}
+}
+
+func Debugln(v ...any) {
 	if LogLevel <= LevelDebug {
 		log.Default().Output(2, fmt.Sprintf("[%s] %v", colorLevel(LevelDebug), fmt.Sprintln(v...)))
 	}
 }
 
-func Info(v ...any) {
+func Infof(format string, v ...any) {
+	if LogLevel <= LevelInfo {
+		log.Default().Output(2, fmt.Sprintf("[%s] %v", colorLevel(LevelInfo), fmt.Sprintf(format, v...)))
+	}
+}
+
+func Infoln(v ...any) {
 	if LogLevel <= LevelInfo {
 		log.Default().Output(2, fmt.Sprintf("[%s] %v", colorLevel(LevelInfo), fmt.Sprintln(v...)))
 	}
 }
 
-func Warning(v ...any) {
+func Warningf(format string, v ...any) {
+	if LogLevel <= LevelWarning {
+		log.Default().Output(2, fmt.Sprintf("[%s] %v", colorLevel(LevelWarning), fmt.Sprintf(format, v...)))
+	}
+}
+
+func Warningln(v ...any) {
 	if LogLevel <= LevelWarning {
 		log.Default().Output(2, fmt.Sprintf("[%s] %v", colorLevel(LevelWarning), fmt.Sprintln(v...)))
 	}
 }
 
-func Error(v ...any) {
+func Errorf(format string, v ...any) {
+	if LogLevel <= LevelError {
+		log.Default().Output(2, fmt.Sprintf("[%s] %v", colorLevel(LevelError), fmt.Sprintf(format, v...)))
+	}
+}
+
+func Errorln(v ...any) {
 	if LogLevel <= LevelError {
 		log.Default().Output(2, fmt.Sprintf("[%s] %v", colorLevel(LevelError), fmt.Sprintln(v...)))
 	}

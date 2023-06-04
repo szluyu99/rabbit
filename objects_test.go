@@ -149,7 +149,7 @@ func TestObjectQuery(t *testing.T) {
 		GetDB: func(c *gin.Context, isCreate bool) *gorm.DB {
 			return db
 		},
-		OnRender: func(c *gin.Context, obj any) error {
+		BeforeRender: func(c *gin.Context, obj any) error {
 			return nil
 		},
 	}
@@ -763,28 +763,28 @@ func initHookTest(t *testing.T) (TestClient, *gorm.DB) {
 		GetDB: func(c *gin.Context, isCreate bool) *gorm.DB {
 			return db
 		},
-		OnCreate: func(ctx *gin.Context, vptr any) error {
+		BeforeCreate: func(ctx *gin.Context, vptr any) error {
 			user := (vptr).(*tuser)
 			if user.Name == "dangerous" {
 				return errors.New("alice is not allowed to create")
 			}
 			return nil
 		},
-		OnRender: func(ctx *gin.Context, vptr any) error {
+		BeforeRender: func(ctx *gin.Context, vptr any) error {
 			user := (vptr).(*tuser)
 			if user.Name != "alice" {
 				user.Age = 99
 			}
 			return nil
 		},
-		OnDelete: func(ctx *gin.Context, vptr any) error {
+		BeforeDelete: func(ctx *gin.Context, vptr any) error {
 			user := (vptr).(*tuser)
 			if user.Name == "alice" {
 				return errors.New("alice is not allowed to delete")
 			}
 			return nil
 		},
-		OnUpdate: func(ctx *gin.Context, vptr any, vals map[string]any) error {
+		BeforeUpdate: func(ctx *gin.Context, vptr any, vals map[string]any) error {
 			user := (vptr).(*tuser)
 			if user.Name == "alice" {
 				return errors.New("alice is not allowed to update")
@@ -794,7 +794,7 @@ func initHookTest(t *testing.T) (TestClient, *gorm.DB) {
 			}
 			return nil
 		},
-		OnBatchDelete: func(ctx *gin.Context, ids []string) error {
+		BeforeBatchDelete: func(ctx *gin.Context, ids []string) error {
 			for _, id := range ids {
 				if id == "1" {
 					return errors.New("alice is not allowed to delete")
@@ -811,7 +811,7 @@ func initHookTest(t *testing.T) (TestClient, *gorm.DB) {
 	return *NewTestClient(r), db
 }
 
-func TestOnRender(t *testing.T) {
+func TestBeforeRender(t *testing.T) {
 	c, _ := initHookTest(t)
 
 	var res QueryResult[[]tuser]

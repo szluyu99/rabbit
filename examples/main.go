@@ -42,11 +42,12 @@ func main() {
 	r := gin.New()
 	r.Use(gin.LoggerWithWriter(lw), gin.Recovery())
 
+	// init rabbit
 	rabbit.InitRabbit(db, r)
 
 	// logger with color
 	rabbit.EnabledConsoleColor = true
-	rabbit.Info("Server started", "addr", serverAddr)
+	rabbit.Infoln("Server started", "addr", serverAddr)
 
 	r.Run(serverAddr)
 }

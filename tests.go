@@ -29,7 +29,7 @@ func NewTestClient(r http.Handler) (c *TestClient) {
 
 func (c *TestClient) SendReq(path string, req *http.Request) *httptest.ResponseRecorder {
 	req.URL.Scheme = "http"
-	req.URL.Host = "MOCKSERVER"
+	req.URL.Host = "MOCK_SERVER"
 	req.RemoteAddr = "127.0.0.1:1234"
 
 	currentUrl := &url.URL{
@@ -49,15 +49,15 @@ func (c *TestClient) SendReq(path string, req *http.Request) *httptest.ResponseR
 	return w
 }
 
-// Get return *httptest.ResponseRecoder
+// Get return *httptest.ResponseRecorder
 func (c *TestClient) Get(path string) *httptest.ResponseRecorder {
-	req, _ := http.NewRequest("GET", path, nil)
+	req, _ := http.NewRequest(http.MethodGet, path, nil)
 	return c.SendReq(path, req)
 }
 
-// Post return *httptest.ResponseRecoder
-func (c *TestClient) Post(method, path string, body []byte) *httptest.ResponseRecorder {
-	req, _ := http.NewRequest(method, path, bytes.NewBuffer(body))
+// Post return *httptest.ResponseRecorder
+func (c *TestClient) Post(path string, body []byte) *httptest.ResponseRecorder {
+	req, _ := http.NewRequest(http.MethodPost, path, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	return c.SendReq(path, req)
 }

@@ -11,10 +11,12 @@ import (
 )
 
 const (
-	UserField  = "_rabbit_uid"
-	GroupField = "_rabbit_gid"
-	DbField    = "_rabbit_db"
-	TzField    = "_rabbit_tz"
+	CacheUserField = "_rabbit_cache_user"
+	UserField      = "_rabbit_uid"
+	GroupField     = "_rabbit_gid"
+	DbField        = "_rabbit_db"
+	TzField        = "_rabbit_tz"
+	// AuthUserField  = "_rabbit_user_id"
 )
 
 type RegisterUserForm struct {
@@ -40,7 +42,7 @@ type ChangePasswordForm struct {
 	Password string `json:"password" binding:"required"`
 }
 
-func InitAuthHandler(prefix string, db *gorm.DB, r *gin.Engine) {
+func RegisterAuthenticationHandlers(prefix string, db *gorm.DB, r *gin.Engine) {
 	if prefix == "" {
 		prefix = GetEnv(ENV_AUTH_PREFIX)
 	}
@@ -55,27 +57,26 @@ func InitAuthHandler(prefix string, db *gorm.DB, r *gin.Engine) {
 func handleUserInfo(c *gin.Context) {
 	user := CurrentUser(c)
 	if user == nil {
-		c.AbortWithStatus(http.StatusForbidden)
+		HandleErrorMsg(c, http.StatusForbidden, "user not login")
 		return
 	}
-
 	c.JSON(http.StatusOK, user)
 }
 
 func handleUserSignin(c *gin.Context) {
 	var form LoginForm
 	if err := c.BindJSON(&form); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		HandleError(c, http.StatusBadRequest, err)
 		return
 	}
 
 	if form.AuthToken == "" && form.Email == "" {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "email is required"})
+		HandleErrorMsg(c, http.StatusBadRequest, "email is required")
 		return
 	}
 
 	if form.Password == "" && form.AuthToken == "" {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "empty password"})
+		HandleErrorMsg(c, http.StatusBadRequest, "empty password")
 		return
 	}
 
@@ -88,28 +89,29 @@ func handleUserSignin(c *gin.Context) {
 	if form.Password != "" {
 		user, err = GetUserByEmail(db, form.Email)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "user not exists"})
+			HandleErrorMsg(c, http.StatusBadRequest, "user not exists")
 			return
 		}
 		if !CheckPassword(user, form.Password) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			HandleErrorMsg(c, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 	} else {
 		user, err = DecodeHashToken(db, form.AuthToken, false)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			HandleError(c, http.StatusUnauthorized, err)
 			return
 		}
 	}
 
 	if !user.Enabled {
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "user not allow login"})
+		HandleErrorMsg(c, http.StatusForbidden, "user not allow login")
 		return
 	}
 
-	if GetBoolValue(db, KEY_USER_ACTIVATED) && !user.Activated {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "waiting for activation"})
+	// if need activated
+	if GetBoolValue(db, KEY_USER_NEED_ACTIVATE) && !user.Activated {
+		HandleErrorMsg(c, http.StatusUnauthorized, "waiting for activation")
 		return
 	}
 
@@ -131,20 +133,20 @@ func handleUserSignin(c *gin.Context) {
 func handleUserSignup(c *gin.Context) {
 	var form RegisterUserForm
 	if err := c.BindJSON(&form); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		HandleError(c, http.StatusBadRequest, err)
 		return
 	}
 
 	db := c.MustGet(DbField).(*gorm.DB)
-	if IsExistsByEmail(db, form.Email) {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "email has exists"})
+	if IsExistByEmail(db, form.Email) {
+		HandleErrorMsg(c, http.StatusBadRequest, "email has exists")
 		return
 	}
 
 	user, err := CreateUser(db, form.Email, form.Password)
 	if err != nil {
 		log.Println("create user fail", form, err)
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err})
+		HandleError(c, http.StatusBadRequest, err)
 		return
 	}
 
@@ -173,7 +175,7 @@ func handleUserSignup(c *gin.Context) {
 		"activation": user.Activated,
 	}
 
-	if !user.Activated && GetBoolValue(db, KEY_USER_ACTIVATED) {
+	if GetBoolValue(db, KEY_USER_NEED_ACTIVATE) && !user.Activated {
 		// sendHashMail(db, user, SigUserVerifyEmail, KEY_VERIFY_EMAIL_EXPIRED, "180d", c.ClientIP(), c.Request.UserAgent())
 		r["expired"] = "180d"
 	} else {
@@ -194,7 +196,7 @@ func handleUserLogout(c *gin.Context) {
 func handleUserChangePassword(c *gin.Context) {
 	var form ChangePasswordForm
 	if err := c.BindJSON(&form); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		HandleError(c, http.StatusBadRequest, err)
 		return
 	}
 
@@ -205,23 +207,20 @@ func handleUserChangePassword(c *gin.Context) {
 	}
 
 	if !user.Enabled {
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "user not allow login"})
+		HandleErrorMsg(c, http.StatusForbidden, "user not allow login")
 		return
 	}
 
 	db := c.MustGet(DbField).(*gorm.DB)
 
-	if GetBoolValue(db, KEY_USER_ACTIVATED) && !user.Activated {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-			"error": "waiting for activation",
-		})
+	if GetBoolValue(db, KEY_USER_NEED_ACTIVATE) && !user.Activated {
+		HandleErrorMsg(c, http.StatusUnauthorized, "waiting for activation")
 		return
 	}
 
-	err := SetPassword(db, user, form.Password)
-	if err != nil {
+	if err := SetPassword(db, user, form.Password); err != nil {
 		log.Println("changed user password fail user:", user.ID, err.Error())
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "changed fail"})
+		HandleErrorMsg(c, http.StatusBadRequest, "changed fail")
 		return
 	}
 

@@ -1,7 +1,9 @@
 package rabbit
 
 import (
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -46,6 +48,75 @@ func WithMemSession(secret string) gin.HandlerFunc {
 func WithGormDB(db *gorm.DB) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		ctx.Set(DbField, db)
+		ctx.Next()
+	}
+}
+
+// 1. auth from session
+// 2. auth from token
+func WithAuthentication() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		// session
+		uid := CurrentUserID(ctx)
+		if uid != 0 {
+			ctx.Next()
+			return
+		}
+
+		// token
+		authValue := ctx.Request.Header.Get("Authorization")
+		if authValue == "" {
+			HandleErrorMsg(ctx, http.StatusUnauthorized, "authorization header not found")
+			return
+		}
+
+		vals := strings.Split(authValue, " ")
+		if len(vals) != 2 || vals[0] != "Bearer" {
+			HandleErrorMsg(ctx, http.StatusUnauthorized, "invalid authorization header")
+			return
+		}
+
+		db := ctx.MustGet(DbField).(*gorm.DB)
+		token := vals[1]
+
+		user, err := DecodeHashToken(db, token, false)
+		if err != nil {
+			HandleError(ctx, http.StatusUnauthorized, err)
+			return
+		}
+
+		ctx.Set(UserField, user.ID)
+		ctx.Next()
+	}
+}
+
+// check if the user has permission to access the url
+// superuser no need to check
+func WithAuthorization() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		db := ctx.MustGet(DbField).(*gorm.DB)
+
+		if !GetBoolValue(db, KEY_API_NEED_AUTH) {
+			ctx.Next()
+		}
+
+		url := ctx.FullPath()[4:]
+		method := ctx.Request.Method
+
+		user := CurrentUser(ctx)
+		if user == nil {
+			HandleError(ctx, http.StatusUnauthorized, errors.New("user need login"))
+			return
+		}
+
+		if !user.IsSuperUser {
+			pass, err := CheckUserPermission(db, user.ID, url, method)
+			if err != nil || !pass {
+				HandleTheError(ctx, ErrPermissionDenied)
+				return
+			}
+		}
+
 		ctx.Next()
 	}
 }

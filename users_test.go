@@ -37,3 +37,7 @@ func TestUserHashToken(t *testing.T) {
 	assert.NotNil(t, u)
 	assert.Equal(t, u.ID, bob.ID)
 }
+
+func TestLogin(t *testing.T) {
+
+}

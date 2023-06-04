@@ -48,11 +48,11 @@ type GetDB func(c *gin.Context, isCreate bool) *gorm.DB // designed for group
 type PrepareQuery func(db *gorm.DB, c *gin.Context) (*gorm.DB, *QueryForm, error)
 
 type (
-	CreateFunc      func(ctx *gin.Context, vptr any) error
-	DeleteFunc      func(ctx *gin.Context, vptr any) error
-	UpdateFunc      func(ctx *gin.Context, vptr any, vals map[string]any) error
-	RenderFunc      func(ctx *gin.Context, vptr any) error
-	BatchDeleteFunc func(ctx *gin.Context, ids []string) error
+	BeforeCreateFunc      func(ctx *gin.Context, vptr any) error
+	BeforeDeleteFunc      func(ctx *gin.Context, vptr any) error
+	BeforeUpdateFunc      func(ctx *gin.Context, vptr any, vals map[string]any) error
+	BeforeRenderFunc      func(ctx *gin.Context, vptr any) error
+	BeforeBatchDeleteFunc func(ctx *gin.Context, ids []string) error
 )
 
 type QueryView struct {
@@ -62,19 +62,19 @@ type QueryView struct {
 }
 
 type WebObject struct {
-	Model         any
-	Group         string
-	Name          string
-	Editables     []string
-	Filterables   []string
-	Orderables    []string
-	Searchables   []string
-	GetDB         GetDB
-	OnCreate      CreateFunc
-	OnUpdate      UpdateFunc
-	OnDelete      DeleteFunc
-	OnRender      RenderFunc
-	OnBatchDelete BatchDeleteFunc
+	Model             any
+	Group             string
+	Name              string
+	Editables         []string
+	Filterables       []string
+	Orderables        []string
+	Searchables       []string
+	GetDB             GetDB
+	BeforeCreate      BeforeCreateFunc
+	BeforeUpdate      BeforeUpdateFunc
+	BeforeDelete      BeforeDeleteFunc
+	BeforeRender      BeforeRenderFunc
+	BeforeBatchDelete BeforeBatchDeleteFunc
 
 	Views        []QueryView
 	AllowMethods int
@@ -116,7 +116,7 @@ type QueryForm struct {
 
 type QueryResult[T any] struct {
 	TotalCount int    `json:"total,omitempty"`
-	Page       int    `json:"Page,omitempty"`
+	Page       int    `json:"page,omitempty"`
 	Limit      int    `json:"limit,omitempty"`
 	Keyword    string `json:"keyword,omitempty"`
 	Items      T      `json:"items"`
@@ -336,8 +336,8 @@ func handleGetObject(c *gin.Context, obj *WebObject) {
 		return
 	}
 
-	if obj.OnRender != nil {
-		if err := obj.OnRender(c, val); err != nil {
+	if obj.BeforeRender != nil {
+		if err := obj.BeforeRender(c, val); err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -354,8 +354,8 @@ func handleCreateObject(c *gin.Context, obj *WebObject) {
 		return
 	}
 
-	if obj.OnCreate != nil {
-		if err := obj.OnCreate(c, val); err != nil {
+	if obj.BeforeCreate != nil {
+		if err := obj.BeforeCreate(c, val); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -428,13 +428,13 @@ func handleEditObject(c *gin.Context, obj *WebObject) {
 
 	pkColName := db.NamingStrategy.ColumnName(obj.tableName, obj.PrimaryKeyName)
 
-	if obj.OnUpdate != nil {
+	if obj.BeforeUpdate != nil {
 		val := reflect.New(obj.modelElem).Interface()
 		if err := db.First(val, pkColName, key).Error; err != nil {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
-		if err := obj.OnUpdate(c, val, inputVals); err != nil {
+		if err := obj.BeforeUpdate(c, val, inputVals); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -469,8 +469,8 @@ func handleDeleteObject(c *gin.Context, obj *WebObject) {
 		return
 	}
 
-	if obj.OnDelete != nil {
-		if err := obj.OnDelete(c, val); err != nil {
+	if obj.BeforeDelete != nil {
+		if err := obj.BeforeDelete(c, val); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -494,8 +494,8 @@ func handleBatchDelete(c *gin.Context, obj *WebObject) {
 
 	db := obj.GetDB(c, false)
 
-	if obj.OnBatchDelete != nil {
-		if err := obj.OnBatchDelete(c, form); err != nil {
+	if obj.BeforeBatchDelete != nil {
+		if err := obj.BeforeBatchDelete(c, form); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -589,12 +589,12 @@ func handleQueryObject(c *gin.Context, obj *WebObject, prepareQuery PrepareQuery
 		return
 	}
 
-	if obj.OnRender != nil {
+	if obj.BeforeRender != nil {
 		vals := reflect.ValueOf(r.Items)
 		if vals.Kind() == reflect.Slice {
 			for i := 0; i < vals.Len(); i++ {
 				v := vals.Index(i).Addr().Interface()
-				if err := obj.OnRender(c, v); err != nil {
+				if err := obj.BeforeRender(c, v); err != nil {
 					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 					return
 				}
@@ -689,7 +689,7 @@ Check Go type corresponds to JSON type.
 */
 func checkType(goKind, jsonKind reflect.Kind) bool {
 	switch goKind {
-	case reflect.Struct, reflect.Slice: // time.Time, associated structures
+	case reflect.Ptr, reflect.Struct, reflect.Slice: // time.Time, associated structures
 		return true
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,

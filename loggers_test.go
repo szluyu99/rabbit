@@ -13,15 +13,15 @@ func TestLogger(t *testing.T) {
 	log.Default().SetOutput(mockData)
 	SetLogLevel(LevelDebug)
 
-	Debug("debug")
+	Debugln("debug")
 	assert.Contains(t, mockData.String(), "[DEBUG] debug")
 
-	Info("info")
+	Infoln("info")
 	assert.Contains(t, mockData.String(), "[INFO] info")
 
-	Warning("warning")
+	Warningln("warning")
 	assert.Contains(t, mockData.String(), "[WARNING] warning")
 
-	Error("error")
+	Errorln("error")
 	assert.Contains(t, mockData.String(), "[ERROR] error")
 }

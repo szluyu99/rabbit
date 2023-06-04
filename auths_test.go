@@ -11,6 +11,7 @@ func initDB(t *testing.T) *gorm.DB {
 	db := InitDatabase("", "", nil)
 	err := InitMigrate(db)
 	assert.Nil(t, err)
+
 	return db
 }
 
@@ -67,66 +68,131 @@ func TestGroups(t *testing.T) {
 func TestRoles(t *testing.T) {
 	db := initDB(t)
 
-	u, err := CreateUser(db, "test@example.com", "123456")
+	// prepare data
+	user, err := CreateUser(db, "test@qq.com", "123456")
 	assert.Nil(t, err)
 
-	role, err := CreateRoleWithPermissions(db, "test", []*Permission{
-		{Name: "read", Code: "read"},
-	})
+	role, err := CreateRole(db, "admin", "ADMIN")
 	assert.Nil(t, err)
 
-	r, err := GetRoleByID(db, role.ID)
+	//
+	v, err := GetRoleByID(db, role.ID)
 	assert.Nil(t, err)
-	assert.Equal(t, "test", r.Name)
+	assert.Equal(t, role.Name, v.Name)
 
-	r, err = GetRoleByName(db, role.Name)
+	v, err = GetRoleByName(db, role.Name)
 	assert.Nil(t, err)
-	assert.Equal(t, role.ID, r.ID)
+	assert.Equal(t, role.Name, v.Name)
 
-	err = AddRoleForUser(db, u.ID, role.ID)
-	assert.Nil(t, err)
+	// check role name exist
+	{
+		flag, err := CheckRoleNameExist(db, "admin")
+		assert.Nil(t, err)
+		assert.True(t, flag)
 
-	rs, err := GetRolesByUser(db, u.ID)
-	assert.Nil(t, err)
-	assert.Len(t, rs, 1)
+		flag, err = CheckRoleNameExist(db, "not-exist")
+		assert.Nil(t, err)
+		assert.False(t, flag)
+	}
 
-	flag, err := CheckRoleInUse(db, role.ID)
+	// check role in use
+	{
+		flag, err := CheckRoleInUse(db, role.ID)
+		assert.Nil(t, err)
+		assert.False(t, flag)
+	}
+
+	// get user roles
+	{
+		err := AddRoleForUser(db, user.ID, role.ID)
+		assert.Nil(t, err)
+
+		roles, err := GetRolesByUser(db, role.ID)
+		assert.Nil(t, err)
+		assert.Equal(t, 1, len(roles))
+	}
+
+	// update role
+	{
+		p1, err := SavePermission(db, 0, 0, "p1", false)
+		assert.Nil(t, err)
+		p2, err := SavePermission(db, 0, 0, "p2", false)
+		assert.Nil(t, err)
+
+		_, err = UpdateRoleWithPermissions(db, role.ID, role.Name, role.Label, []uint{p1.ID, p2.ID})
+		assert.Nil(t, err)
+
+		ps, err := GetPermissionsByRole(db, role.ID)
+		assert.Nil(t, err)
+		assert.Equal(t, 2, len(ps))
+	}
+
+	err = DeleteRole(db, role.ID)
 	assert.Nil(t, err)
-	assert.True(t, flag)
 }
 
 func TestPermissions(t *testing.T) {
 	db := initDB(t)
 
-	role, err := CreateRoleWithPermissions(db, "test", []*Permission{
-		{Name: "read", Code: "read"},
-	})
+	// prepare data
+	// user, err := CreateUser(db, "test@qq.com", "123456")
+	// assert.Nil(t, err)
+
+	p1, err := SavePermission(db, 0, 0, "p1", false)
 	assert.Nil(t, err)
 
-	p, err := AddPermissionForRole(db, role.ID, "write", "write")
+	//
+	v, err := GetPermissionByID(db, p1.ID)
 	assert.Nil(t, err)
-	assert.NotNil(t, p)
+	assert.Equal(t, p1.Name, v.Name)
 
-	p1, err := GetPermissionByID(db, p.ID)
+	v, err = GetPermissionByName(db, p1.Name)
 	assert.Nil(t, err)
-	assert.Equal(t, p.Name, p1.Name)
+	assert.Equal(t, p1.Name, v.Name)
 
-	p2, err := GetPermissionByCode(db, p.Code)
-	assert.Nil(t, err)
-	assert.Equal(t, p.Name, p2.Name)
+	// check permission name exist
+	{
+		flag, err := CheckPermissionNameExist(db, "p1")
+		assert.Nil(t, err)
+		assert.True(t, flag)
 
-	ps, err := GetPermissionsByRole(db, role.ID)
-	assert.Nil(t, err)
-	assert.Len(t, ps, 2)
+		flag, err = CheckPermissionNameExist(db, "not-exist")
+		assert.Nil(t, err)
+		assert.False(t, flag)
+	}
 
-	err = DeletePermissionForRole(db, role.ID, p.Code)
-	assert.Nil(t, err)
+	// check permission in use
+	{
+		_, err := AddRoleWithPermissions(db, "admin", "ADMIN", []uint{p1.ID})
+		assert.Nil(t, err)
 
-	ps, err = GetPermissionsByRole(db, role.ID)
-	assert.Nil(t, err)
-	assert.Len(t, ps, 1)
+		flag, err := CheckPermissionInUse(db, p1.ID)
+		assert.Nil(t, err)
+		assert.True(t, flag)
+	}
 
-	flag, err := CheckPermissionInUse(db, p.Code)
-	assert.Nil(t, err)
-	assert.False(t, flag)
+	// delete child permissions
+	{
+		// create children
+		p11, _ := SavePermission(db, 0, p1.ID, "p1-1", false)
+		p12, _ := SavePermission(db, 0, p1.ID, "p1-2", false)
+		p13, _ := SavePermission(db, 0, p1.ID, "p1-3", false)
+
+		children, err := GetPermissionChildren(db, p11.ID)
+		assert.Nil(t, err)
+		assert.Len(t, children, 0)
+
+		children, err = GetPermissionChildren(db, p1.ID)
+		assert.Nil(t, err)
+		assert.Len(t, children, 3)
+
+		// delete parent with children
+		err = DeletePermission(db, p1.ID)
+		assert.Nil(t, err)
+
+		var count int64
+		db.Model(&Permission{}).Where("id in (?)", []uint{p11.ID, p12.ID, p13.ID}).Count(&count)
+		assert.Equal(t, int64(0), count)
+	}
+
 }

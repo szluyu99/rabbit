@@ -35,6 +35,7 @@ func InTimezone(c *gin.Context, timezone string) {
 	session.Save()
 }
 
+// gin context
 func CurrentTimezone(c *gin.Context) *time.Location {
 	if cachedObj, exists := c.Get(TzField); exists && cachedObj != nil {
 		return cachedObj.(*time.Location)
@@ -68,43 +69,72 @@ func CurrentTimezone(c *gin.Context) *time.Location {
 	return tz
 }
 
+/*
+1. try get from token
+2. try get from session
+*/
+func CurrentUserID(c *gin.Context) uint {
+	userID := c.GetUint(UserField)
+
+	if userID == 0 {
+		session := sessions.Default(c)
+		val := session.Get(UserField)
+		if val == nil {
+			return 0
+		}
+		userID = val.(uint)
+	}
+
+	return userID
+}
+
+/*
+1. try get user from context cache
+2. try get user from token/session
+3. set context cache
+*/
 func CurrentUser(c *gin.Context) *User {
-	if cachedObj, exists := c.Get(UserField); exists && cachedObj != nil {
-		return cachedObj.(*User)
+	// 1
+	if cached, exist := c.Get(CacheUserField); exist && cached != nil {
+		return cached.(*User)
 	}
 
-	session := sessions.Default(c)
-	userId := session.Get(UserField)
-	if userId == nil {
-		return nil
-	}
+	// 2
+	userID := CurrentUserID(c)
 
+	// 3
 	db := c.MustGet(DbField).(*gorm.DB)
-	user, err := GetUserByUID(db, userId.(uint))
+	user, err := GetUserByID(db, userID)
 	if err != nil {
 		return nil
 	}
-	c.Set(UserField, user)
+
+	c.Set(CacheUserField, user)
 	return user
 }
 
 func Login(c *gin.Context, user *User) {
 	db := c.MustGet(DbField).(*gorm.DB)
 	SetLastLogin(db, user, c.ClientIP())
+
 	session := sessions.Default(c)
 	session.Set(UserField, user.ID)
 	session.Save()
+
 	Sig().Emit(SigUserLogin, user, c)
 }
 
 func Logout(c *gin.Context, user *User) {
 	c.Set(UserField, nil)
+
 	session := sessions.Default(c)
 	session.Delete(UserField)
 	session.Save()
+
 	Sig().Emit(SigUserLogout, user, c)
 }
 
+// password
 func CheckPassword(user *User, password string) bool {
 	return user.Password == HashPassword(password)
 }
@@ -127,7 +157,8 @@ func HashPassword(password string) string {
 	return fmt.Sprintf("sha256$%s%x", salt, hashVal)
 }
 
-func GetUserByUID(db *gorm.DB, userID uint) (*User, error) {
+// user
+func GetUserByID(db *gorm.DB, userID uint) (*User, error) {
 	var val User
 	result := db.Where("id", userID).Where("Enabled", true).Take(&val)
 	if result.Error != nil {
@@ -145,7 +176,7 @@ func GetUserByEmail(db *gorm.DB, email string) (user *User, err error) {
 	return &val, nil
 }
 
-func IsExistsByEmail(db *gorm.DB, email string) bool {
+func IsExistByEmail(db *gorm.DB, email string) bool {
 	_, err := GetUserByEmail(db, email)
 	return err == nil
 }
@@ -177,12 +208,12 @@ func SetLastLogin(db *gorm.DB, user *User, lastIp string) error {
 }
 
 /*
-ts-uid-token
-- base64(email$timestamp) + "-" + sha256(salt + logintimestamp + password + email$timestamp)
+timestamp-uid-token
+base64(email$timestamp) + "-" + sha256(salt + logintimestamp + password + email$timestamp)
 */
-func EncodeHashToken(user *User, timestamp int64, useLastlogin bool) (hash string) {
+func EncodeHashToken(user *User, timestamp int64, useLastLogin bool) (hash string) {
 	logintimestamp := "0"
-	if useLastlogin && user.LastLogin != nil {
+	if useLastLogin && user.LastLogin != nil {
 		logintimestamp = fmt.Sprintf("%d", user.LastLogin.Unix())
 	}
 	t := fmt.Sprintf("%s$%d", user.Email, timestamp)
@@ -192,6 +223,9 @@ func EncodeHashToken(user *User, timestamp int64, useLastlogin bool) (hash strin
 	return hash
 }
 
+/*
+base64(email$timestamp) + "-" + sha256(salt + logintimestamp + password + email$timestamp)
+*/
 func DecodeHashToken(db *gorm.DB, hash string, useLastLogin bool) (user *User, err error) {
 	vals := strings.Split(hash, "-")
 	if len(vals) != 2 {
@@ -212,6 +246,7 @@ func DecodeHashToken(db *gorm.DB, hash string, useLastLogin bool) (user *User, e
 		return nil, errors.New("bad token")
 	}
 
+	// check expired
 	if time.Now().Unix() > ts {
 		return nil, errors.New("token expired")
 	}
@@ -220,9 +255,11 @@ func DecodeHashToken(db *gorm.DB, hash string, useLastLogin bool) (user *User, e
 	if err != nil {
 		return nil, errors.New("bad token")
 	}
+
 	token := EncodeHashToken(user, ts, useLastLogin)
 	if token != hash {
 		return nil, errors.New("bad token")
 	}
+
 	return user, nil
 }
