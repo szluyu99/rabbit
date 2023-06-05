@@ -24,17 +24,9 @@ POST   /auth/change_password
 
 ```
 PUT    /auth/role
-PATCH  /auth/role/:id
-DELETE /auth/role/:id
+PATCH  /auth/role/:key
+DELETE /auth/role/:key
 PUT    /auth/permission
 PATCH  /auth/permission/:key
-DELETE /auth/permission/:id
-```
-
-### With config module
-
-```
-PATCH  /auth/config/:key
-DELETE /auth/config/:key
-POST   /auth/config
+DELETE /auth/permission/:key
 ```

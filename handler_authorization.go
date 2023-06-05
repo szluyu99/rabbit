@@ -2,7 +2,6 @@ package rabbit
 
 import (
 	"net/http"
-	"path/filepath"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -16,17 +15,13 @@ type RoleForm struct {
 	PermissionIds []uint `json:"permission_ids"`
 }
 
-func RegisterAuthorizationHandlers(prefix string, db *gorm.DB, r *gin.Engine) {
-	if prefix == "" {
-		prefix = GetEnv(ENV_AUTH_PREFIX)
-	}
-
-	r.PUT(filepath.Join(prefix, "role"), handleCreateRole)
-	r.PATCH(filepath.Join(prefix, "role/:id"), handleUpdateRole)
-	r.DELETE(filepath.Join(prefix, "role/:id"), handleDeleteRole)
-	r.PUT(filepath.Join(prefix, "permission"), handleAddPermission)
-	r.PATCH(filepath.Join(prefix, "permission/:key"), handleEditPermission)
-	r.DELETE(filepath.Join(prefix, "permission/:id"), handleDeletePermission)
+func RegisterAuthorizationHandlers(db *gorm.DB, r gin.IRoutes) {
+	r.PUT("role", handleCreateRole)
+	r.PATCH("role/:key", handleUpdateRole)
+	r.DELETE("role/:key", handleDeleteRole)
+	r.PUT("permission", handleAddPermission)
+	r.PATCH("permission/:key", handleEditPermission)
+	r.DELETE("permission/:key", handleDeletePermission)
 }
 
 // role
@@ -56,7 +51,7 @@ func handleCreateRole(c *gin.Context) {
 }
 
 func handleUpdateRole(c *gin.Context) {
-	roleID, err := strconv.Atoi(c.Param("id"))
+	roleID, err := strconv.Atoi(c.Param("key"))
 	if err != nil {
 		HandleErrorMsg(c, http.StatusBadRequest, "role id invalid")
 		return
@@ -80,7 +75,7 @@ func handleUpdateRole(c *gin.Context) {
 }
 
 func handleDeleteRole(c *gin.Context) {
-	roleID, err := strconv.Atoi(c.Param("id"))
+	roleID, err := strconv.Atoi(c.Param("key"))
 	if err != nil {
 		HandleErrorMsg(c, http.StatusBadRequest, "role id invalid")
 		return
@@ -122,7 +117,7 @@ func handleAddPermission(c *gin.Context) {
 }
 
 func handleDeletePermission(c *gin.Context) {
-	pID, err := strconv.Atoi(c.Param("id"))
+	pID, err := strconv.Atoi(c.Param("key"))
 	if err != nil {
 		HandleErrorMsg(c, http.StatusBadRequest, "permission id invalid")
 		return

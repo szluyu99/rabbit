@@ -17,7 +17,8 @@ const ENV_SESSION_SECRET = "SESSION_SECRET"
 
 const ENV_SALT = "PASSWORD_SALT" // User Password salt
 const ENV_AUTH_PREFIX = "AUTH_PREFIX"
-const ENV_CONFIG_PREFIX = "CONFIG_PREFIX"
+
+// const ENV_CONFIG_PREFIX = "CONFIG_PREFIX"
 
 // User need to activate
 const KEY_USER_NEED_ACTIVATE = "USER_NEED_ACTIVATE"
@@ -52,6 +53,6 @@ func InitRabbit(db *gorm.DB, r *gin.Engine) {
 
 	// 5
 	RegisterAuthenticationHandlers("/auth", db, r)
-	RegisterAuthorizationHandlers("/auth", db, r)
-	RegisterConfigHandlers("/auth", db, r)
+	// RegisterAuthorizationHandlers("/api", db, r)
+	// RegisterConfigHandlers("/api", db, r)
 }

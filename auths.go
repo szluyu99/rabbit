@@ -214,6 +214,19 @@ func GetPermissionByName(db *gorm.DB, code string) (*Permission, error) {
 	return Get(db, &Permission{Name: code})
 }
 
+func GetPermissionByPolicies(db *gorm.DB, policies ...string) (*Permission, error) {
+	switch len(policies) {
+	case 1:
+		return Get(db, &Permission{P1: policies[0]})
+	case 2:
+		return Get(db, &Permission{P1: policies[0], P2: policies[1]})
+	case 3:
+		return Get(db, &Permission{P1: policies[0], P2: policies[1], P3: policies[2]})
+	default:
+		return nil, errors.New("invalid policies")
+	}
+}
+
 func GetPermissionsByRole(db *gorm.DB, roleID uint) ([]*Permission, error) {
 	var role Role
 	result := db.Model(&Role{}).Preload("Permissions").Take(&role, roleID)
@@ -254,6 +267,9 @@ func CheckPermissionNameExist(db *gorm.DB, name string) (bool, error) {
 func DeletePermission(db *gorm.DB, permissionID uint) error {
 	p, err := GetPermissionByID(db, permissionID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
 		return err
 	}
 
@@ -361,6 +377,14 @@ func CheckRolePermission(db *gorm.DB, roleID uint, policies ...string) (bool, er
 }
 
 func CheckUserPermission(db *gorm.DB, userID uint, policies ...string) (bool, error) {
+	p, err := GetPermissionByPolicies(db, policies...)
+	if err != nil {
+		return false, err
+	}
+	if p.Anonymous {
+		return true, nil
+	}
+
 	rs, err := GetRolesByUser(db, userID)
 	if err != nil {
 		return false, err

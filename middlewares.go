@@ -92,7 +92,7 @@ func WithAuthentication() gin.HandlerFunc {
 
 // check if the user has permission to access the url
 // superuser no need to check
-func WithAuthorization() gin.HandlerFunc {
+func WithAuthorization(prefix string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		db := ctx.MustGet(DbField).(*gorm.DB)
 
@@ -100,7 +100,7 @@ func WithAuthorization() gin.HandlerFunc {
 			ctx.Next()
 		}
 
-		url := ctx.FullPath()[4:]
+		url := ctx.FullPath()[len(prefix):]
 		method := ctx.Request.Method
 
 		user := CurrentUser(ctx)
