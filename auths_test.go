@@ -196,3 +196,67 @@ func TestPermissions(t *testing.T) {
 	}
 
 }
+
+func TestCheckPermission(t *testing.T) {
+
+	// not anonymous
+	{
+		db := initDB(t)
+
+		u, err := CreateUser(db, "test@example.com", "123456")
+		assert.Nil(t, err)
+
+		r, _ := CreateRoleWithPermissions(db, "admin", "ADMIN", []*Permission{
+			{
+				Name: "p1",
+				P1:   "GET",
+				P2:   "/api/v1/users",
+			},
+		})
+
+		AddRoleForUser(db, u.ID, r.ID)
+
+		pass, err := CheckUserPermission(db, u.ID, "GET", "/api/v1/users")
+		assert.Equal(t, true, pass)
+		assert.Nil(t, err)
+
+		pass, err = CheckUserPermission(db, u.ID, "POST", "/api/v1/users")
+		assert.Equal(t, false, pass)
+		assert.Nil(t, err)
+
+		pass, err = CheckUserPermission(db, u.ID, "GET", "/api/v2/users")
+		assert.Equal(t, false, pass)
+		assert.Nil(t, err)
+	}
+
+	// anonymous
+	{
+		db := initDB(t)
+
+		u, err := CreateUser(db, "test@example.com", "123456")
+		assert.Nil(t, err)
+
+		r, _ := CreateRoleWithPermissions(db, "admin", "ADMIN", []*Permission{
+			{
+				Name:      "p1",
+				P1:        "GET",
+				P2:        "/api/v1/users",
+				Anonymous: true, // !!!
+			},
+		})
+
+		AddRoleForUser(db, u.ID, r.ID)
+
+		pass, err := CheckUserPermission(db, u.ID, "GET", "/api/v1/users")
+		assert.Equal(t, true, pass)
+		assert.Nil(t, err)
+
+		pass, err = CheckUserPermission(db, u.ID, "POST", "/api/v1/users")
+		assert.Equal(t, true, pass)
+		assert.Nil(t, err)
+
+		pass, err = CheckUserPermission(db, u.ID, "GET", "/api/v2/users")
+		assert.Equal(t, true, pass)
+		assert.Nil(t, err)
+	}
+}

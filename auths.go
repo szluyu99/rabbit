@@ -334,6 +334,10 @@ func CheckRolePermission(db *gorm.DB, roleID uint, policies ...string) (bool, er
 	}
 
 	for _, p := range ps {
+		if p.Anonymous {
+			return true, nil
+		}
+
 		switch len(policies) {
 		case 1:
 			if p.P1 == policies[0] {

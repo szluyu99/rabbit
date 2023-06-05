@@ -46,7 +46,7 @@ type User struct {
 	FirstName   string     `json:"firstName,omitempty" gorm:"size:128"`
 	LastName    string     `json:"lastName,omitempty" gorm:"size:128"`
 	DisplayName string     `json:"displayName,omitempty" gorm:"size:128"`
-	IsSuperUser bool       `json:"-"`
+	IsSuperUser bool       `json:"isSuper"`
 	Enabled     bool       `json:"enabled"`
 	Activated   bool       `json:"activated"`
 	LastLogin   *time.Time `json:"lastLogin,omitempty"`
