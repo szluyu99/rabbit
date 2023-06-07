@@ -23,98 +23,10 @@ const (
 	SigUserCreate = "user.create"
 )
 
-func InTimezone(c *gin.Context, timezone string) {
-	tz, err := time.LoadLocation(timezone)
-	if err != nil {
-		return
-	}
-	c.Set(TzField, tz)
-
-	session := sessions.Default(c)
-	session.Set(TzField, timezone)
-	session.Save()
-}
-
-// gin context
-func CurrentTimezone(c *gin.Context) *time.Location {
-	if cachedObj, exists := c.Get(TzField); exists && cachedObj != nil {
-		return cachedObj.(*time.Location)
-	}
-
-	session := sessions.Default(c)
-	tzkey := session.Get(TzField)
-
-	if tzkey == nil {
-		if user := CurrentUser(c); user != nil {
-			tzkey = user.Timezone
-		}
-	}
-
-	var tz *time.Location
-	defer func() {
-		if tz == nil {
-			tz = time.UTC
-		}
-		c.Set(TzField, tz)
-	}()
-
-	if tzkey == nil {
-		return time.UTC
-	}
-
-	tz, _ = time.LoadLocation(tzkey.(string))
-	if tz == nil {
-		return time.UTC
-	}
-	return tz
-}
-
-/*
-1. try get from token
-2. try get from session
-*/
-func CurrentUserID(c *gin.Context) uint {
-	userID := c.GetUint(UserField)
-
-	if userID == 0 {
-		session := sessions.Default(c)
-		val := session.Get(UserField)
-		if val == nil {
-			return 0
-		}
-		userID = val.(uint)
-	}
-
-	return userID
-}
-
-/*
-1. try get user from context cache
-2. try get user from token/session
-3. set context cache
-*/
-func CurrentUser(c *gin.Context) *User {
-	// 1
-	if cached, exist := c.Get(CacheUserField); exist && cached != nil {
-		return cached.(*User)
-	}
-
-	// 2
-	userID := CurrentUserID(c)
-
-	// 3
-	db := c.MustGet(DbField).(*gorm.DB)
-	user, err := GetUserByID(db, userID)
-	if err != nil {
-		return nil
-	}
-
-	c.Set(CacheUserField, user)
-	return user
-}
-
+// set session
 func Login(c *gin.Context, user *User) {
 	db := c.MustGet(DbField).(*gorm.DB)
+
 	SetLastLogin(db, user, c.ClientIP())
 
 	session := sessions.Default(c)
@@ -124,9 +36,13 @@ func Login(c *gin.Context, user *User) {
 	Sig().Emit(SigUserLogin, user, c)
 }
 
+// 1. remove context
+// 2. remove session
 func Logout(c *gin.Context, user *User) {
+	// 1
 	c.Set(UserField, nil)
 
+	// 2
 	session := sessions.Default(c)
 	session.Delete(UserField)
 	session.Save()
@@ -135,24 +51,23 @@ func Logout(c *gin.Context, user *User) {
 }
 
 // password
-func CheckPassword(user *User, password string) bool {
-	return user.Password == HashPassword(password)
+func CheckPassword(dbPassword, password string) bool {
+	return dbPassword == HashPassword(password)
 }
 
 func SetPassword(db *gorm.DB, user *User, password string) (err error) {
 	p := HashPassword(password)
-	err = UpdateUserFields(db, user, map[string]any{
+	if err = UpdateFields(db, user, map[string]any{
 		"Password": p,
-	})
-	if err != nil {
-		return
+	}); err != nil {
+		return err
 	}
 	user.Password = p
-	return
+	return err
 }
 
 func HashPassword(password string) string {
-	salt := GetEnv(ENV_SALT)
+	salt := GetEnv(ENV_PASSWORD_SALT)
 	hashVal := sha256.Sum256([]byte(salt + password))
 	return fmt.Sprintf("sha256$%s%x", salt, hashVal)
 }
@@ -192,10 +107,6 @@ func CreateUser(db *gorm.DB, email, password string) (*User, error) {
 	return &user, result.Error
 }
 
-func UpdateUserFields(db *gorm.DB, user *User, vals map[string]any) error {
-	return db.Model(user).Updates(vals).Error
-}
-
 func SetLastLogin(db *gorm.DB, user *User, lastIp string) error {
 	now := time.Now().Truncate(1 * time.Second)
 	vals := map[string]any{
@@ -217,7 +128,7 @@ func EncodeHashToken(user *User, timestamp int64, useLastLogin bool) (hash strin
 		logintimestamp = fmt.Sprintf("%d", user.LastLogin.Unix())
 	}
 	t := fmt.Sprintf("%s$%d", user.Email, timestamp)
-	salt := GetEnv(ENV_SALT)
+	salt := GetEnv(ENV_PASSWORD_SALT)
 	hashVal := sha256.Sum256([]byte(salt + logintimestamp + user.Password + t))
 	hash = base64.RawStdEncoding.EncodeToString([]byte(t)) + "-" + fmt.Sprintf("%x", hashVal)
 	return hash

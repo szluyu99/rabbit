@@ -15,12 +15,9 @@ const ENV_DB_DRIVER = "DB_DRIVER"
 const ENV_DSN = "DSN"
 const ENV_SESSION_SECRET = "SESSION_SECRET"
 
-const ENV_SALT = "PASSWORD_SALT" // User Password salt
+const ENV_PASSWORD_SALT = "PASSWORD_SALT" // User Password salt
 const ENV_AUTH_PREFIX = "AUTH_PREFIX"
 
-// const ENV_CONFIG_PREFIX = "CONFIG_PREFIX"
-
-// User need to activate
 const KEY_USER_NEED_ACTIVATE = "USER_NEED_ACTIVATE"
 const KEY_API_NEED_AUTH = "API_NEED_AUTH"
 
@@ -49,10 +46,8 @@ func InitRabbit(db *gorm.DB, r *gin.Engine) {
 
 	// 4
 	CheckValue(db, KEY_USER_NEED_ACTIVATE, "false")
-	CheckValue(db, KEY_API_NEED_AUTH, "true")
+	CheckValue(db, KEY_API_NEED_AUTH, "false")
 
 	// 5
 	RegisterAuthenticationHandlers("/auth", db, r)
-	// RegisterAuthorizationHandlers("/api", db, r)
-	// RegisterConfigHandlers("/api", db, r)
 }

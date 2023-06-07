@@ -3,35 +3,13 @@ package rabbit
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"runtime"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
-type Error struct {
-	Code int
-	Msg  string
-}
-
-func (e Error) Error() string {
-	return fmt.Sprintf("[%d] %s", e.Code, e.Msg)
-}
-
-var (
-	ErrPermissionDenied = &Error{Code: http.StatusForbidden, Msg: "permission denied"}
-)
-
-func HandleTheError(c *gin.Context, e *Error) {
-	c.AbortWithStatusJSON(e.Code, gin.H{"error": e.Msg})
-}
-
 func HandleError(c *gin.Context, code int, err error) {
-	if e, ok := err.(*Error); ok {
-		code = e.Code
-	}
-
 	msg := err.Error()
 
 	// add file and line number
@@ -51,6 +29,7 @@ func HandleError(c *gin.Context, code int, err error) {
 	c.AbortWithStatusJSON(code, gin.H{"error": msg})
 }
 
-func HandleErrorMsg(c *gin.Context, code int, msg string) {
+func HandleErrorMessage(c *gin.Context, code int, msg string) {
+	c.Error(fmt.Errorf(msg))
 	c.AbortWithStatusJSON(code, gin.H{"error": msg})
 }

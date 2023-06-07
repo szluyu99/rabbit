@@ -10,15 +10,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	CacheUserField = "_rabbit_cache_user"
-	UserField      = "_rabbit_uid"
-	GroupField     = "_rabbit_gid"
-	DbField        = "_rabbit_db"
-	TzField        = "_rabbit_tz"
-	// AuthUserField  = "_rabbit_user_id"
-)
-
 type RegisterUserForm struct {
 	Email       string `json:"email" binding:"required"`
 	Password    string `json:"password" binding:"required"`
@@ -43,10 +34,6 @@ type ChangePasswordForm struct {
 }
 
 func RegisterAuthenticationHandlers(prefix string, db *gorm.DB, r *gin.Engine) {
-	if prefix == "" {
-		prefix = GetEnv(ENV_AUTH_PREFIX)
-	}
-
 	r.GET(filepath.Join(prefix, "info"), handleUserInfo)
 	r.POST(filepath.Join(prefix, "login"), handleUserSignin)
 	r.POST(filepath.Join(prefix, "register"), handleUserSignup)
@@ -57,7 +44,7 @@ func RegisterAuthenticationHandlers(prefix string, db *gorm.DB, r *gin.Engine) {
 func handleUserInfo(c *gin.Context) {
 	user := CurrentUser(c)
 	if user == nil {
-		HandleErrorMsg(c, http.StatusForbidden, "user not login")
+		HandleErrorMessage(c, http.StatusForbidden, "user not login")
 		return
 	}
 	c.JSON(http.StatusOK, user)
@@ -70,13 +57,13 @@ func handleUserSignin(c *gin.Context) {
 		return
 	}
 
-	if form.AuthToken == "" && form.Email == "" {
-		HandleErrorMsg(c, http.StatusBadRequest, "email is required")
+	if form.Email == "" && form.AuthToken == "" {
+		HandleErrorMessage(c, http.StatusBadRequest, "email is required")
 		return
 	}
 
 	if form.Password == "" && form.AuthToken == "" {
-		HandleErrorMsg(c, http.StatusBadRequest, "empty password")
+		HandleErrorMessage(c, http.StatusBadRequest, "empty password")
 		return
 	}
 
@@ -89,11 +76,11 @@ func handleUserSignin(c *gin.Context) {
 	if form.Password != "" {
 		user, err = GetUserByEmail(db, form.Email)
 		if err != nil {
-			HandleErrorMsg(c, http.StatusBadRequest, "user not exists")
+			HandleErrorMessage(c, http.StatusBadRequest, "user not exists")
 			return
 		}
-		if !CheckPassword(user, form.Password) {
-			HandleErrorMsg(c, http.StatusUnauthorized, "unauthorized")
+		if !CheckPassword(user.Password, form.Password) {
+			HandleErrorMessage(c, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 	} else {
@@ -105,13 +92,13 @@ func handleUserSignin(c *gin.Context) {
 	}
 
 	if !user.Enabled {
-		HandleErrorMsg(c, http.StatusForbidden, "user not allow login")
+		HandleErrorMessage(c, http.StatusForbidden, "user not allow login")
 		return
 	}
 
 	// if need activated
 	if GetBoolValue(db, KEY_USER_NEED_ACTIVATE) && !user.Activated {
-		HandleErrorMsg(c, http.StatusUnauthorized, "waiting for activation")
+		HandleErrorMessage(c, http.StatusUnauthorized, "waiting for activation")
 		return
 	}
 
@@ -139,13 +126,12 @@ func handleUserSignup(c *gin.Context) {
 
 	db := c.MustGet(DbField).(*gorm.DB)
 	if IsExistByEmail(db, form.Email) {
-		HandleErrorMsg(c, http.StatusBadRequest, "email has exists")
+		HandleErrorMessage(c, http.StatusBadRequest, "email has exists")
 		return
 	}
 
 	user, err := CreateUser(db, form.Email, form.Password)
 	if err != nil {
-		log.Println("create user fail", form, err)
 		HandleError(c, http.StatusBadRequest, err)
 		return
 	}
@@ -163,7 +149,7 @@ func handleUserSignup(c *gin.Context) {
 	vals["LastLogin"] = &n
 	vals["LastLoginIP"] = c.ClientIP()
 
-	err = UpdateUserFields(db, user, vals)
+	err = UpdateFields(db, user, vals)
 	if err != nil {
 		log.Println("update user fields fail id:", user.ID, vals, err)
 	}
@@ -186,8 +172,7 @@ func handleUserSignup(c *gin.Context) {
 }
 
 func handleUserLogout(c *gin.Context) {
-	user := CurrentUser(c)
-	if user != nil {
+	if user := CurrentUser(c); user != nil {
 		Logout(c, user)
 	}
 	c.JSON(http.StatusOK, gin.H{})
@@ -207,20 +192,18 @@ func handleUserChangePassword(c *gin.Context) {
 	}
 
 	if !user.Enabled {
-		HandleErrorMsg(c, http.StatusForbidden, "user not allow login")
+		HandleErrorMessage(c, http.StatusForbidden, "user not allow login")
 		return
 	}
 
 	db := c.MustGet(DbField).(*gorm.DB)
-
 	if GetBoolValue(db, KEY_USER_NEED_ACTIVATE) && !user.Activated {
-		HandleErrorMsg(c, http.StatusUnauthorized, "waiting for activation")
+		HandleErrorMessage(c, http.StatusUnauthorized, "waiting for activation")
 		return
 	}
 
 	if err := SetPassword(db, user, form.Password); err != nil {
-		log.Println("changed user password fail user:", user.ID, err.Error())
-		HandleErrorMsg(c, http.StatusBadRequest, "changed fail")
+		HandleErrorMessage(c, http.StatusBadRequest, "password changed fail")
 		return
 	}
 

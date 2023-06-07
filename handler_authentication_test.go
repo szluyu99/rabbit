@@ -6,13 +6,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
 )
 
-// TestDoGet Quick Test CheckResponse
+// check response code and unmarshal response body to map[string]any
 func checkResponse(t *testing.T, w *httptest.ResponseRecorder) (response map[string]any) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	err := json.Unmarshal(w.Body.Bytes(), &response)
@@ -45,20 +44,6 @@ func TestRabbitInit(t *testing.T) {
 	assert.Equal(t, w.Header().Get("Access-Control-Allow-Origin"), CORS_ALLOW_ALL)
 }
 
-func TestSession(t *testing.T) {
-	r := gin.Default()
-	r.Use(WithCookieSession("hello"))
-	r.GET("/mock", func(ctx *gin.Context) {
-		s := sessions.Default(ctx)
-		s.Set(UserField, "test")
-		s.Save()
-	})
-	client := NewTestClient(r)
-	w := client.Get("/mock")
-	assert.Contains(t, w.Header(), "Set-Cookie")
-	assert.Contains(t, w.Header().Get("Set-Cookie"), SessionField+"=")
-}
-
 func TestAuthHandler(t *testing.T) {
 	db, _, client := initTestClient(t)
 
@@ -77,43 +62,48 @@ func TestAuthHandler(t *testing.T) {
 			Email:    "bob@example.org",
 			Password: "hello12345",
 		}
+
+		// register user
 		var user User
 		err := client.CallPost("/auth/register", form, &user)
 		assert.Nil(t, err)
 		assert.Equal(t, user.Email, form.Email)
 
+		// register user with same email, should fail
 		err = client.CallPost("/auth/register", form, &user)
 		assert.NotNil(t, err)
 		assert.Contains(t, err.Error(), "email has exists")
 	}
 	{
+		// login success
 		form := LoginForm{
 			Email:    "bob@example.org",
 			Password: "hello12345",
 		}
+
 		var user User
 		err := client.CallPost("/auth/login", form, &user)
 		assert.Nil(t, err)
 		assert.Equal(t, user.Email, form.Email)
 		assert.Empty(t, user.Password)
-		// FIXME:
-		// assert.Equal(t, user.LastLoginIP, "")
-	}
-	{
+		assert.Equal(t, "127.0.0.1", user.LastLoginIP)
+
+		// get user info after login
 		w := client.Get("/auth/info")
 		vals := checkResponse(t, w)
 		assert.Contains(t, vals, "email")
 		assert.Equal(t, vals["email"], "bob@example.org")
-	}
-	{
-		w := client.Get("/auth/logout")
+
+		// logout
+		w = client.Get("/auth/logout")
 		checkResponse(t, w)
-	}
-	{
-		w := client.Get("/auth/info")
+
+		// get user info after logout, should fail
+		w = client.Get("/auth/info")
 		assert.Equal(t, http.StatusForbidden, w.Code)
 	}
 	{
+		// not exist user, should fail
 		form := LoginForm{
 			Email:    "bob@hello.org",
 			Password: "-",
@@ -123,6 +113,7 @@ func TestAuthHandler(t *testing.T) {
 		assert.Contains(t, err.Error(), "user not exists")
 	}
 	{
+		// wrong password, should fail
 		form := LoginForm{
 			Email:    "bob@example.org",
 			Password: "-",
@@ -132,6 +123,7 @@ func TestAuthHandler(t *testing.T) {
 		assert.Contains(t, err.Error(), "unauthorized")
 	}
 	{
+		// set need activate env
 		form := LoginForm{
 			Email:    "bob@example.org",
 			Password: "hello12345",
@@ -142,8 +134,9 @@ func TestAuthHandler(t *testing.T) {
 		assert.Contains(t, err.Error(), "waiting for activation")
 	}
 	{
+		// user not enabled, should fail
 		u, _ := GetUserByEmail(db, "bob@example.org")
-		err := UpdateUserFields(db, u, map[string]any{
+		err := UpdateFields(db, u, map[string]any{
 			"Enabled": false,
 		})
 		assert.Nil(t, err)
@@ -160,11 +153,10 @@ func TestAuthHandler(t *testing.T) {
 
 func TestAuthToken(t *testing.T) {
 	db, _, client := initTestClient(t)
-
 	defer func() {
 		db.Where("email", "bob@example.org").Delete(&User{})
 	}()
-	SetValue(db, KEY_USER_NEED_ACTIVATE, "no")
+
 	CreateUser(db, "bob@example.org", "123456")
 
 	form := LoginForm{
@@ -172,10 +164,13 @@ func TestAuthToken(t *testing.T) {
 		Password: "123456",
 		Remember: true,
 	}
+
 	var user User
 	err := client.CallPost("/auth/login", form, &user)
 	assert.Nil(t, err)
 	assert.NotEmpty(t, user.AuthToken)
+
+	// login with token
 	{
 		form := LoginForm{
 			Email:     "bob@example.org",
@@ -197,6 +192,7 @@ func TestAuthPassword(t *testing.T) {
 	SetValue(db, KEY_USER_NEED_ACTIVATE, "no")
 	CreateUser(db, "bob@example.org", "123456")
 
+	// login with password
 	form := LoginForm{
 		Email:    "bob@example.org",
 		Password: "123456",
@@ -204,13 +200,26 @@ func TestAuthPassword(t *testing.T) {
 	var user User
 	err := client.CallPost("/auth/login", form, &user)
 	assert.Nil(t, err)
+
+	// change password
 	{
 		form := ChangePasswordForm{
-			Password: "123456",
+			Password: "654321",
 		}
 		var r bool
 		err = client.CallPost("/auth/change_password", form, &r)
 		assert.Nil(t, err)
 		assert.True(t, r)
+	}
+
+	// login with new password
+	{
+		form := LoginForm{
+			Email:    "bob@example.org",
+			Password: "654321",
+		}
+
+		err := client.CallPost("/auth/login", form, nil)
+		assert.Nil(t, err)
 	}
 }

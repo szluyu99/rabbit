@@ -114,9 +114,9 @@ func TestRoles(t *testing.T) {
 
 	// update role
 	{
-		p1, err := SavePermission(db, 0, 0, "p1", false)
+		p1, err := SavePermission(db, 0, 0, "p1", "/p1", "GET", false)
 		assert.Nil(t, err)
-		p2, err := SavePermission(db, 0, 0, "p2", false)
+		p2, err := SavePermission(db, 0, 0, "p2", "/p2", "POST", false)
 		assert.Nil(t, err)
 
 		_, err = UpdateRoleWithPermissions(db, role.ID, role.Name, role.Label, []uint{p1.ID, p2.ID})
@@ -138,7 +138,7 @@ func TestPermissions(t *testing.T) {
 	// user, err := CreateUser(db, "test@qq.com", "123456")
 	// assert.Nil(t, err)
 
-	p1, err := SavePermission(db, 0, 0, "p1", false)
+	p1, err := SavePermission(db, 0, 0, "p1", "/p1", "GET", false)
 	assert.Nil(t, err)
 
 	//
@@ -174,9 +174,9 @@ func TestPermissions(t *testing.T) {
 	// delete child permissions
 	{
 		// create children
-		p11, _ := SavePermission(db, 0, p1.ID, "p1-1", false)
-		p12, _ := SavePermission(db, 0, p1.ID, "p1-2", false)
-		p13, _ := SavePermission(db, 0, p1.ID, "p1-3", false)
+		p11, _ := SavePermission(db, 0, p1.ID, "p1-1", "/p11", "GET", false)
+		p12, _ := SavePermission(db, 0, p1.ID, "p1-2", "/p12", "GET", false)
+		p13, _ := SavePermission(db, 0, p1.ID, "p1-3", "/p13", "GET", false)
 
 		children, err := GetPermissionChildren(db, p11.ID)
 		assert.Nil(t, err)
@@ -198,19 +198,15 @@ func TestPermissions(t *testing.T) {
 }
 
 func TestCheckPermission(t *testing.T) {
-
 	// not anonymous
 	{
 		db := initDB(t)
-
-		u, err := CreateUser(db, "test@example.com", "123456")
-		assert.Nil(t, err)
-
+		u, _ := CreateUser(db, "test@example.com", "123456")
 		r, _ := CreateRoleWithPermissions(db, "admin", "ADMIN", []*Permission{
 			{
-				Name: "p1",
-				P1:   "GET",
-				P2:   "/api/v1/users",
+				Name:   "p1",
+				Uri:    "GET",
+				Method: "/api/v1/users",
 			},
 		})
 
@@ -232,31 +228,24 @@ func TestCheckPermission(t *testing.T) {
 	// anonymous
 	{
 		db := initDB(t)
+		u, _ := CreateUser(db, "test@example.com", "123456")
 
-		u, err := CreateUser(db, "test@example.com", "123456")
-		assert.Nil(t, err)
+		SavePermission(db, 0, 0, "p1", "/api/v1/users", "GET", true)
+		SavePermission(db, 0, 0, "p2", "/api/v1/users", "POST", true)
 
-		r, _ := CreateRoleWithPermissions(db, "admin", "ADMIN", []*Permission{
-			{
-				Name:      "p1",
-				P1:        "GET",
-				P2:        "/api/v1/users",
-				Anonymous: true, // !!!
-			},
-		})
+		count, _ := Count[Permission](db)
+		assert.Equal(t, 2, count)
 
-		AddRoleForUser(db, u.ID, r.ID)
-
-		pass, err := CheckUserPermission(db, u.ID, "GET", "/api/v1/users")
+		pass, err := CheckUserPermission(db, u.ID, "/api/v1/users", "GET")
 		assert.Equal(t, true, pass)
 		assert.Nil(t, err)
 
-		pass, err = CheckUserPermission(db, u.ID, "POST", "/api/v1/users")
+		pass, err = CheckUserPermission(db, u.ID, "/api/v1/users", "POST")
 		assert.Equal(t, true, pass)
 		assert.Nil(t, err)
 
-		pass, err = CheckUserPermission(db, u.ID, "GET", "/api/v2/users")
-		assert.Equal(t, true, pass)
+		pass, err = CheckUserPermission(db, u.ID, "/api/v2/users", "GET")
+		assert.Equal(t, false, pass)
 		assert.Nil(t, err)
 	}
 }

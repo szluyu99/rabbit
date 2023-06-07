@@ -24,7 +24,7 @@ type Profile struct {
 	Extra   map[string]any `json:"extra,omitempty"`
 }
 
-func (p *Profile) Scan(value interface{}) error {
+func (p *Profile) Scan(value any) error {
 	if value == nil {
 		return nil
 	}
@@ -39,7 +39,6 @@ type User struct {
 	ID        uint      `json:"id" gorm:"primarykey"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
-	GroupID   uint      `json:"groupId" gorm:"index"`
 
 	Email       string     `json:"email" gorm:"size:128;uniqueIndex"`
 	Password    string     `json:"-" gorm:"size:128"`
@@ -73,8 +72,8 @@ type Group struct {
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 
-	Name string `json:"name" gorm:"size:200;uniqueIndex"`
-	// Extra string `json:"extra"`
+	Name  string `json:"name" gorm:"size:200;uniqueIndex"`
+	Extra string `json:"extra"`
 
 	// for association
 	Users []*User `json:"users" gorm:"many2many:group_members;"`
@@ -100,9 +99,8 @@ type Permission struct {
 
 	ParentID  uint   `json:"parentId"`
 	Name      string `json:"name" gorm:"size:200;uniqueIndex"`
-	P1        string `json:"p1" gorm:"size:200"`
-	P2        string `json:"p2" gorm:"size:200"`
-	P3        string `json:"p3" gorm:"size:200"`
+	Uri       string `json:"uri" gorm:"size:200"`
+	Method    string `json:"method" gorm:"size:200"`
 	Anonymous bool   `json:"anonymous"` // any role can access
 
 	// for association

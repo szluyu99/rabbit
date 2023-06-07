@@ -36,7 +36,7 @@ func handleCreateRole(c *gin.Context) {
 
 	exist, err := CheckRoleNameExist(db, form.Name)
 	if exist || err != nil {
-		HandleErrorMsg(c, http.StatusBadRequest, "role name exists")
+		HandleErrorMessage(c, http.StatusBadRequest, "role name exists")
 		return
 	}
 
@@ -53,7 +53,7 @@ func handleCreateRole(c *gin.Context) {
 func handleUpdateRole(c *gin.Context) {
 	roleID, err := strconv.Atoi(c.Param("key"))
 	if err != nil {
-		HandleErrorMsg(c, http.StatusBadRequest, "role id invalid")
+		HandleErrorMessage(c, http.StatusBadRequest, "role id invalid")
 		return
 	}
 
@@ -77,7 +77,7 @@ func handleUpdateRole(c *gin.Context) {
 func handleDeleteRole(c *gin.Context) {
 	roleID, err := strconv.Atoi(c.Param("key"))
 	if err != nil {
-		HandleErrorMsg(c, http.StatusBadRequest, "role id invalid")
+		HandleErrorMessage(c, http.StatusBadRequest, "role id invalid")
 		return
 	}
 
@@ -85,7 +85,7 @@ func handleDeleteRole(c *gin.Context) {
 
 	flag, err := CheckRoleInUse(db, uint(roleID))
 	if err != nil || flag {
-		HandleErrorMsg(c, http.StatusBadRequest, "role in use")
+		HandleErrorMessage(c, http.StatusBadRequest, "role in use")
 		return
 	}
 
@@ -107,7 +107,7 @@ func handleAddPermission(c *gin.Context) {
 
 	db := c.MustGet(DbField).(*gorm.DB)
 
-	p, err := SavePermission(db, 0, form.ParentID, form.Name, form.Anonymous, form.P1, form.P2, form.P3)
+	p, err := SavePermission(db, 0, form.ParentID, form.Name, form.Uri, form.Method, form.Anonymous)
 	if err != nil {
 		HandleError(c, http.StatusInternalServerError, err)
 		return
@@ -119,7 +119,7 @@ func handleAddPermission(c *gin.Context) {
 func handleDeletePermission(c *gin.Context) {
 	pID, err := strconv.Atoi(c.Param("key"))
 	if err != nil {
-		HandleErrorMsg(c, http.StatusBadRequest, "permission id invalid")
+		HandleErrorMessage(c, http.StatusBadRequest, "permission id invalid")
 		return
 	}
 
@@ -127,7 +127,7 @@ func handleDeletePermission(c *gin.Context) {
 
 	flag, err := CheckPermissionInUse(db, uint(pID))
 	if err != nil || flag {
-		HandleErrorMsg(c, http.StatusBadRequest, "permission in use")
+		HandleErrorMessage(c, http.StatusBadRequest, "permission in use")
 		return
 	}
 

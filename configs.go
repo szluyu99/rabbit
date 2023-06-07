@@ -70,16 +70,16 @@ func GetValue(db *gorm.DB, key string) string {
 	return v.Value
 }
 
-func GetIntValue(db *gorm.DB, key string, defaultValue int) int {
+func GetIntValue(db *gorm.DB, key string, default_value int) int {
 	v := GetValue(db, key)
 
 	if v == "" {
-		return defaultValue
+		return default_value
 	}
 
 	val, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
-		return defaultValue
+		return default_value
 	}
 
 	return int(val)
@@ -100,9 +100,9 @@ func GetBoolValue(db *gorm.DB, key string) bool {
 	return val
 }
 
-// CheckValue check if key exists, if not, set defaultValue
-func CheckValue(db *gorm.DB, key, defaultValue string) {
+// CheckValue check if key exists, if not, set default_value
+func CheckValue(db *gorm.DB, key, default_value string) {
 	if GetValue(db, key) == "" {
-		SetValue(db, key, defaultValue)
+		SetValue(db, key, default_value)
 	}
 }

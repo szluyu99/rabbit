@@ -3,23 +3,21 @@ package rabbit
 import (
 	"errors"
 
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
 // group
-func GetGroupByID(db *gorm.DB, groupID uint) (*Group, error) {
-	return GetByID[Group](db, groupID)
+func GetGroupByID(db *gorm.DB, gid uint) (*Group, error) {
+	return GetByID[Group](db, gid)
 }
 
 func GetGroupByName(db *gorm.DB, name string) (*Group, error) {
 	return Get(db, &Group{Name: name})
 }
 
-func GetGroupsByUser(db *gorm.DB, userID uint) ([]*Group, error) {
+func GetGroupsByUser(db *gorm.DB, uid uint) ([]*Group, error) {
 	var user User
-	result := db.Where("id", userID).Preload("Groups").Take(&user)
+	result := db.Where("id", uid).Preload("Groups").Take(&user)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -27,16 +25,16 @@ func GetGroupsByUser(db *gorm.DB, userID uint) ([]*Group, error) {
 	return user.Groups, nil
 }
 
-func GetFirstGroupByUser(db *gorm.DB, userID uint) (*Group, error) {
+func GetFirstGroupByUser(db *gorm.DB, uid uint) (*Group, error) {
 	var member GroupMember
-	result := db.Where("user_id", userID).Preload("Group").Take(&member)
+	result := db.Where("user_id", uid).Preload("Group").Take(&member)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 	return &member.Group, nil
 }
 
-func CreateGroupByUser(db *gorm.DB, userID uint, name string) (*Group, error) {
+func CreateGroupByUser(db *gorm.DB, uid uint, name string) (*Group, error) {
 	group := Group{
 		Name: name,
 	}
@@ -46,7 +44,7 @@ func CreateGroupByUser(db *gorm.DB, userID uint, name string) (*Group, error) {
 	}
 
 	member := GroupMember{
-		UserID:  userID,
+		UserID:  uid,
 		GroupID: group.ID,
 	}
 	result = db.Create(&member)
@@ -56,10 +54,10 @@ func CreateGroupByUser(db *gorm.DB, userID uint, name string) (*Group, error) {
 	return &group, nil
 }
 
-func CheckGroupInUse(db *gorm.DB, groupID uint) (bool, error) {
+func CheckGroupInUse(db *gorm.DB, gid uint) (bool, error) {
 	var count int64
 	if err := db.Model(&GroupMember{}).
-		Where("group_id", groupID).
+		Where("group_id", gid).
 		Count(&count).Error; err != nil {
 		return false, err
 	}
@@ -67,26 +65,26 @@ func CheckGroupInUse(db *gorm.DB, groupID uint) (bool, error) {
 }
 
 // role
-func GetRoleByID(db *gorm.DB, roleID uint) (*Role, error) {
-	return GetByID[Role](db, roleID)
+func GetRoleByID(db *gorm.DB, rid uint) (*Role, error) {
+	return GetByID[Role](db, rid)
 }
 
 func GetRoleByName(db *gorm.DB, name string) (*Role, error) {
 	return Get(db, &Role{Name: name})
 }
 
-func GetRolesByUser(db *gorm.DB, userID uint) ([]*Role, error) {
+func GetRolesByUser(db *gorm.DB, uid uint) ([]*Role, error) {
 	var user User
-	result := db.Model(&User{}).Preload("Roles").Take(&user, userID)
+	result := db.Model(&User{}).Preload("Roles").Take(&user, uid)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 	return user.Roles, nil
 }
 
-func CheckRoleInUse(db *gorm.DB, roleID uint) (bool, error) {
+func CheckRoleInUse(db *gorm.DB, rid uint) (bool, error) {
 	var count int64
-	result := db.Model(&UserRole{}).Where("role_id", roleID).Count(&count)
+	result := db.Model(&UserRole{}).Where("role_id", rid).Count(&count)
 	if result.Error != nil {
 		return false, result.Error
 	}
@@ -131,9 +129,9 @@ func AddRoleWithPermissions(db *gorm.DB, name, label string, ps []uint) (*Role, 
 	return &role, nil
 }
 
-func UpdateRoleWithPermissions(db *gorm.DB, roleID uint, name, label string, ps []uint) (*Role, error) {
+func UpdateRoleWithPermissions(db *gorm.DB, rid uint, name, label string, ps []uint) (*Role, error) {
 	role := Role{
-		ID:    roleID,
+		ID:    rid,
 		Name:  name,
 		Label: label,
 	}
@@ -163,12 +161,12 @@ func UpdateRoleWithPermissions(db *gorm.DB, roleID uint, name, label string, ps 
 	return &role, nil
 }
 
-func DeleteRole(db *gorm.DB, roleID uint) error {
-	result := db.Delete(&RolePermission{}, "role_id", roleID)
+func DeleteRole(db *gorm.DB, rid uint) error {
+	result := db.Delete(&RolePermission{}, "role_id", rid)
 	if result.Error != nil {
 		return result.Error
 	}
-	result = db.Delete(&Role{}, "id", roleID)
+	result = db.Delete(&Role{}, "id", rid)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -176,27 +174,14 @@ func DeleteRole(db *gorm.DB, roleID uint) error {
 }
 
 // permission
-func SavePermission(db *gorm.DB, id, pID uint, name string, anonymous bool, policies ...string) (*Permission, error) {
+func SavePermission(db *gorm.DB, id, pid uint, name, uri, method string, anonymous bool) (*Permission, error) {
 	permission := Permission{
 		ID:        id,
 		Name:      name,
-		ParentID:  pID,
+		ParentID:  pid,
+		Uri:       uri,
+		Method:    method,
 		Anonymous: anonymous,
-	}
-
-	switch len(policies) {
-	case 0:
-	case 1:
-		permission.P1 = policies[0]
-	case 2:
-		permission.P1 = policies[0]
-		permission.P2 = policies[1]
-	case 3:
-		permission.P1 = policies[0]
-		permission.P2 = policies[1]
-		permission.P3 = policies[2]
-	default:
-		return nil, errors.New("invalid policies")
 	}
 
 	result := db.Save(&permission)
@@ -206,48 +191,39 @@ func SavePermission(db *gorm.DB, id, pID uint, name string, anonymous bool, poli
 	return &permission, nil
 }
 
-func GetPermissionByID(db *gorm.DB, permissionID uint) (*Permission, error) {
-	return GetByID[Permission](db, permissionID)
+func GetPermissionByID(db *gorm.DB, pid uint) (*Permission, error) {
+	return GetByID[Permission](db, pid)
 }
 
-func GetPermissionByName(db *gorm.DB, code string) (*Permission, error) {
-	return Get(db, &Permission{Name: code})
+func GetPermissionByName(db *gorm.DB, name string) (*Permission, error) {
+	return Get(db, &Permission{Name: name})
 }
 
-func GetPermissionByPolicies(db *gorm.DB, policies ...string) (*Permission, error) {
-	switch len(policies) {
-	case 1:
-		return Get(db, &Permission{P1: policies[0]})
-	case 2:
-		return Get(db, &Permission{P1: policies[0], P2: policies[1]})
-	case 3:
-		return Get(db, &Permission{P1: policies[0], P2: policies[1], P3: policies[2]})
-	default:
-		return nil, errors.New("invalid policies")
-	}
+func GetPermission(db *gorm.DB, uri, method string) (*Permission, error) {
+	return Get(db.Debug(), &Permission{Uri: uri, Method: method})
 }
 
-func GetPermissionsByRole(db *gorm.DB, roleID uint) ([]*Permission, error) {
+func GetPermissionsByRole(db *gorm.DB, rid uint) ([]*Permission, error) {
 	var role Role
-	result := db.Model(&Role{}).Preload("Permissions").Take(&role, roleID)
+	result := db.Model(&Role{}).Preload("Permissions").Take(&role, rid)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 	return role.Permissions, nil
 }
 
-func GetPermissionChildren(db *gorm.DB, permissionID uint) ([]*Permission, error) {
+func GetPermissionChildren(db *gorm.DB, pid uint) ([]*Permission, error) {
 	var permissions []*Permission
-	result := db.Model(&Permission{}).Where("parent_id", permissionID).Find(&permissions)
+	result := db.Model(&Permission{}).Where("parent_id", pid).Find(&permissions)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 	return permissions, nil
 }
 
-func CheckPermissionInUse(db *gorm.DB, permissionID uint) (bool, error) {
+func CheckPermissionInUse(db *gorm.DB, pid uint) (bool, error) {
 	var count int64
-	result := db.Model(&RolePermission{}).Where("permission_id", permissionID).Count(&count)
+	result := db.Model(&RolePermission{}).Where("permission_id", pid).Count(&count)
 	if result.Error != nil {
 		return false, result.Error
 	}
@@ -264,8 +240,8 @@ func CheckPermissionNameExist(db *gorm.DB, name string) (bool, error) {
 }
 
 // if the permission is a parent permission, delete all its children
-func DeletePermission(db *gorm.DB, permissionID uint) error {
-	p, err := GetPermissionByID(db, permissionID)
+func DeletePermission(db *gorm.DB, pid uint) error {
+	p, err := GetPermissionByID(db, pid)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
@@ -274,11 +250,11 @@ func DeletePermission(db *gorm.DB, permissionID uint) error {
 	}
 
 	if p.ParentID == 0 {
-		children, err := GetPermissionChildren(db, permissionID)
+		children, err := GetPermissionChildren(db, pid)
 		if err != nil {
 			return err
 		}
-		ids := []uint{permissionID}
+		ids := []uint{pid}
 		for _, child := range children {
 			ids = append(ids, child.ID)
 		}
@@ -287,7 +263,7 @@ func DeletePermission(db *gorm.DB, permissionID uint) error {
 			return result.Error
 		}
 	} else {
-		result := db.Delete(&Permission{}, "id", permissionID)
+		result := db.Delete(&Permission{}, "id", pid)
 		if result.Error != nil {
 			return result.Error
 		}
@@ -297,7 +273,7 @@ func DeletePermission(db *gorm.DB, permissionID uint) error {
 }
 
 // user
-func GetUsersByGroup(db *gorm.DB, groupID uint) ([]*User, error) {
+func GetUsersByGroup(db *gorm.DB, gid uint) ([]*User, error) {
 	var group Group
 	result := db.Model(&Group{}).Preload("Users").Take(&group)
 	if result.Error != nil {
@@ -306,7 +282,7 @@ func GetUsersByGroup(db *gorm.DB, groupID uint) ([]*User, error) {
 	return group.Users, nil
 }
 
-func GetUsersByRole(db *gorm.DB, roleID uint) ([]*User, error) {
+func GetUsersByRole(db *gorm.DB, rid uint) ([]*User, error) {
 	var role Role
 	result := db.Model(&Role{}).Preload("Users").Take(&role)
 	if result.Error != nil {
@@ -315,17 +291,17 @@ func GetUsersByRole(db *gorm.DB, roleID uint) ([]*User, error) {
 	return role.Users, nil
 }
 
-func AddRoleForUser(db *gorm.DB, userId uint, roleId uint) error {
+func AddRoleForUser(db *gorm.DB, uid uint, rid uint) error {
 	userRole := UserRole{
-		UserID: userId,
-		RoleID: roleId,
+		UserID: uid,
+		RoleID: rid,
 	}
 	return db.Model(&userRole).Create(userRole).Error
 }
 
-func UpdateRolesForUser(db *gorm.DB, userId uint, roleIDs []uint) (*User, error) {
+func UpdateRolesForUser(db *gorm.DB, uid uint, rids []uint) (*User, error) {
 	user := User{
-		ID: userId,
+		ID: uid,
 	}
 
 	result := db.Delete(&UserRole{}, "user_id", user.ID)
@@ -333,7 +309,7 @@ func UpdateRolesForUser(db *gorm.DB, userId uint, roleIDs []uint) (*User, error)
 		return nil, result.Error
 	}
 
-	for _, roleID := range roleIDs {
+	for _, roleID := range rids {
 		if err := AddRoleForUser(db, user.ID, roleID); err != nil {
 			return nil, err
 		}
@@ -343,55 +319,42 @@ func UpdateRolesForUser(db *gorm.DB, userId uint, roleIDs []uint) (*User, error)
 }
 
 // check
-func CheckRolePermission(db *gorm.DB, roleID uint, policies ...string) (bool, error) {
-	ps, err := GetPermissionsByRole(db, roleID)
+func CheckRolePermission(db *gorm.DB, rid uint, uri, method string) (bool, error) {
+	ps, err := GetPermissionsByRole(db, rid)
 	if err != nil {
 		return false, err
 	}
 
 	for _, p := range ps {
-		if p.Anonymous {
+		if p.Anonymous || (p.Uri == uri && p.Method == method) {
 			return true, nil
-		}
-
-		switch len(policies) {
-		case 1:
-			if p.P1 == policies[0] {
-				return true, nil
-			}
-		case 2:
-			if p.P1 == policies[0] && p.P2 == policies[1] {
-				return true, nil
-			}
-		case 3:
-			if p.P1 == policies[0] && p.P2 == policies[1] && p.P3 == policies[2] {
-				return true, nil
-			}
-		default:
-			if p.P1 == "" && p.P2 == "" && p.P3 == "" {
-				return true, nil
-			}
 		}
 	}
 	return false, nil
 }
 
-func CheckUserPermission(db *gorm.DB, userID uint, policies ...string) (bool, error) {
-	p, err := GetPermissionByPolicies(db, policies...)
+func CheckUserPermission(db *gorm.DB, uid uint, uri, method string) (bool, error) {
+	p, err := GetPermission(db, uri, method)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
 		return false, err
 	}
 	if p.Anonymous {
 		return true, nil
 	}
 
-	rs, err := GetRolesByUser(db, userID)
+	rs, err := GetRolesByUser(db, uid)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
 		return false, err
 	}
 
 	for _, r := range rs {
-		if pass, _ := CheckRolePermission(db, r.ID, policies...); pass {
+		if pass, _ := CheckRolePermission(db, r.ID, uri, method); pass {
 			return true, nil
 		}
 	}
@@ -399,39 +362,12 @@ func CheckUserPermission(db *gorm.DB, userID uint, policies ...string) (bool, er
 	return false, nil
 }
 
-// gin handler
-func CurrentGroup(c *gin.Context) *Group {
-	if cachedObj, exists := c.Get(GroupField); exists && cachedObj != nil {
-		return cachedObj.(*Group)
-	}
-
-	session := sessions.Default(c)
-	groupId := session.Get(GroupField)
-	if groupId == nil {
-		return nil
-	}
-
-	db := c.MustGet(DbField).(*gorm.DB)
-	group, err := GetGroupByID(db, groupId.(uint))
-	if err != nil {
-		return nil
-	}
-	c.Set(GroupField, group)
-	return group
-}
-
-func SwitchGroup(c *gin.Context, group *Group) {
-	session := sessions.Default(c)
-	session.Set(GroupField, group.ID)
-	session.Save()
-}
-
 // for test
-func CreateRoleWithPermissions(db *gorm.DB, name, label string, permissions []*Permission) (*Role, error) {
+func CreateRoleWithPermissions(db *gorm.DB, name, label string, ps []*Permission) (*Role, error) {
 	role := Role{
 		Name:        name,
 		Label:       label,
-		Permissions: permissions,
+		Permissions: ps,
 	}
 	result := db.Create(&role)
 	if result.Error != nil {

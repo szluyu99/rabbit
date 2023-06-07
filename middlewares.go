@@ -1,7 +1,6 @@
 package rabbit
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
@@ -18,6 +17,10 @@ const CORS_ALLOW_HEADERS = "Content-Type, Content-Length, Accept-Encoding, X-CSR
 const CORS_ALLOW_METHODS = "POST, OPTIONS, GET, PUT, PATCH, DELETE"
 const XAuthTokenHeader = "X-Auth-Token"
 
+/*
+1. set CORS header
+2. if method is OPTIONS, return 204
+*/
 func CORSEnabled() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", CORS_ALLOW_ALL)
@@ -29,6 +32,7 @@ func CORSEnabled() gin.HandlerFunc {
 			c.AbortWithStatus(http.StatusNoContent) // 204
 			return
 		}
+
 		c.Next()
 	}
 }
@@ -57,8 +61,8 @@ func WithGormDB(db *gorm.DB) gin.HandlerFunc {
 func WithAuthentication() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		// session
-		uid := CurrentUserID(ctx)
-		if uid != 0 {
+		user := CurrentUser(ctx)
+		if user != nil {
 			ctx.Next()
 			return
 		}
@@ -66,13 +70,13 @@ func WithAuthentication() gin.HandlerFunc {
 		// token
 		authValue := ctx.Request.Header.Get("Authorization")
 		if authValue == "" {
-			HandleErrorMsg(ctx, http.StatusUnauthorized, "authorization header not found")
+			HandleErrorMessage(ctx, http.StatusUnauthorized, "authorization header not found")
 			return
 		}
 
 		vals := strings.Split(authValue, " ")
 		if len(vals) != 2 || vals[0] != "Bearer" {
-			HandleErrorMsg(ctx, http.StatusUnauthorized, "invalid authorization header")
+			HandleErrorMessage(ctx, http.StatusUnauthorized, "invalid authorization header")
 			return
 		}
 
@@ -85,7 +89,13 @@ func WithAuthentication() gin.HandlerFunc {
 			return
 		}
 
-		ctx.Set(UserField, user.ID)
+		// set session
+		session := sessions.Default(ctx)
+		session.Set(UserField, user.ID)
+		session.Save()
+
+		// set context
+		ctx.Set(UserField, user)
 		ctx.Next()
 	}
 }
@@ -105,14 +115,14 @@ func WithAuthorization(prefix string) gin.HandlerFunc {
 
 		user := CurrentUser(ctx)
 		if user == nil {
-			HandleError(ctx, http.StatusUnauthorized, errors.New("user need login"))
+			HandleErrorMessage(ctx, http.StatusUnauthorized, "user need login")
 			return
 		}
 
 		if !user.IsSuperUser {
 			pass, err := CheckUserPermission(db, user.ID, url, method)
 			if err != nil || !pass {
-				HandleTheError(ctx, ErrPermissionDenied)
+				HandleErrorMessage(ctx, http.StatusUnauthorized, "permission denied")
 				return
 			}
 		}
