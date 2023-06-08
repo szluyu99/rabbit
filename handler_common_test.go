@@ -257,6 +257,29 @@ func TestHandleEditFunc(t *testing.T) {
 	}
 }
 
+func TestExecuteEdit(t *testing.T) {
+	db, _ := gorm.Open(sqlite.Open("file::memory:"), nil)
+	db.AutoMigrate(&testUser{})
+
+	db.Create(&testUser{Name: "alice", Age: 12})
+
+	v, err := ExecuteEdit[testUser](db, 1, map[string]any{
+		"name": "bob",
+		"age":  99,
+	})
+	assert.Equal(t, nil, err)
+	assert.Equal(t, "bob", v.Name)
+	assert.Equal(t, 99, v.Age)
+
+	v, err = ExecuteEdit[testUser](db, "1", map[string]any{
+		"name": "clash",
+		"age":  66,
+	})
+	assert.Equal(t, nil, err)
+	assert.Equal(t, "clash", v.Name)
+	assert.Equal(t, 66, v.Age)
+}
+
 func TestHandleCreate(t *testing.T) {
 	r := gin.Default()
 	db, _ := gorm.Open(sqlite.Open("file::memory:"), nil)
@@ -398,30 +421,115 @@ func TestHandleGet(t *testing.T) {
 	}
 }
 
-func TestHandleQuery(t *testing.T) {
+func TestHandleQueryNil(t *testing.T) {
 	r := gin.Default()
 	db, _ := gorm.Open(sqlite.Open("file::memory:"), nil)
 	db.AutoMigrate(&testUser{})
 
 	r.POST("/user", func(ctx *gin.Context) {
-		HandleQuery[testUser](ctx, db)
+		HandleQuery[testUser](ctx, db, nil)
 	})
 
 	db.Create(&testUser{Name: "alice", Age: 12})
 	db.Create(&testUser{Name: "bob", Age: 13})
 	db.Create(&testUser{Name: "clash", Age: 14})
 
+	client := NewTestClient(r)
 	{
-		req := httptest.NewRequest("POST", "/user", nil)
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-		var queryResult QueryResult[[]testUser]
-		err := json.Unmarshal(w.Body.Bytes(), &queryResult)
+		var result QueryResult[[]testUser]
+		err := client.CallPost("/user", nil, &result)
 		assert.Nil(t, err)
-		assert.Equal(t, 3, queryResult.TotalCount)
-		assert.Equal(t, "alice", queryResult.Items[0].Name)
-		assert.Equal(t, 12, queryResult.Items[0].Age)
+		assert.Equal(t, 3, result.TotalCount)
+		assert.Equal(t, "alice", result.Items[0].Name)
+		assert.Equal(t, 12, result.Items[0].Age)
 	}
+}
+
+func TestHandleQuery(t *testing.T) {
+	r := gin.Default()
+	db, _ := gorm.Open(sqlite.Open("file::memory:"), nil)
+	db.AutoMigrate(&testUser{})
+
+	r.POST("/user", func(ctx *gin.Context) {
+		HandleQuery[testUser](ctx, db, &QueryOption{
+			Filterables: []string{"Name", "Age", "Enabled"},
+			Searchables: []string{"Name"},
+			Orderables:  []string{"Age"},
+		})
+	})
+
+	db.Create(&testUser{Name: "alice", Age: 12})
+	db.Create(&testUser{Name: "bob", Age: 13})
+	db.Create(&testUser{Name: "clash", Age: 14})
+
+	client := NewTestClient(r)
+	// basic
+	{
+		var result QueryResult[[]testUser]
+		err := client.CallPost("/user", &QueryForm{}, &result)
+		assert.Nil(t, err)
+		assert.Equal(t, 3, result.TotalCount)
+	}
+	// filter
+	{
+		var result QueryResult[[]testUser]
+		err := client.CallPost("/user", &QueryForm{
+			Filters: []Filter{
+				{Name: "name", Op: "=", Value: "alice"},
+			},
+		}, &result)
+		assert.Nil(t, err)
+		assert.Equal(t, 1, result.TotalCount)
+		assert.Equal(t, "alice", result.Items[0].Name)
+	}
+	// search
+	{
+		var result QueryResult[[]testUser]
+		err := client.CallPost("/user", &QueryForm{Keyword: "bob"}, &result)
+		assert.Nil(t, err)
+		assert.Equal(t, 1, result.TotalCount)
+		assert.Equal(t, "bob", result.Items[0].Name)
+	}
+	// order
+	{
+		// desc
+		var result QueryResult[[]testUser]
+		err := client.CallPost("/user", &QueryForm{
+			Orders: []Order{
+				{Name: "age", Op: "desc"},
+			},
+		}, &result)
+		assert.Nil(t, err)
+		assert.Equal(t, 3, result.TotalCount)
+		assert.Equal(t, "clash", result.Items[0].Name)
+		// asc
+		err = client.CallPost("/user", &QueryForm{
+			Orders: []Order{
+				{Name: "age", Op: "asc"},
+			},
+		}, &result)
+		assert.Nil(t, err)
+		assert.Equal(t, 3, result.TotalCount)
+		assert.Equal(t, "alice", result.Items[0].Name)
+	}
+}
+
+func TestExecuteQuery(t *testing.T) {
+	db, _ := gorm.Open(sqlite.Open("file::memory:"), nil)
+	db.AutoMigrate(&testUser{})
+
+	db.Create(&testUser{Name: "alice", Age: 12})
+	db.Create(&testUser{Name: "bob", Age: 13})
+	db.Create(&testUser{Name: "clash", Age: 14})
+
+	list, count, err := ExecuteQuery[testUser](db, QueryForm{
+		Page:  1,
+		Limit: 10,
+		Filters: []Filter{
+			{Name: "name", Op: "=", Value: "alice"},
+		},
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, count)
+	assert.Equal(t, "alice", list[0].Name)
 }

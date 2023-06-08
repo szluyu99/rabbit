@@ -200,7 +200,7 @@ func GetPermissionByName(db *gorm.DB, name string) (*Permission, error) {
 }
 
 func GetPermission(db *gorm.DB, uri, method string) (*Permission, error) {
-	return Get(db.Debug(), &Permission{Uri: uri, Method: method})
+	return Get(db, &Permission{Uri: uri, Method: method})
 }
 
 func GetPermissionsByRole(db *gorm.DB, rid uint) ([]*Permission, error) {

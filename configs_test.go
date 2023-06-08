@@ -10,23 +10,40 @@ import (
 )
 
 func TestEnv(t *testing.T) {
+	// not exist .env file
 	v := GetEnv("NOT_EXIST_ENV")
 	assert.Empty(t, v)
 	defer os.Remove(".env")
 
+	// write .env file
 	os.WriteFile(".env", []byte(`
 	#hello
 	xx
-	EXIST_ENV = 100	
+	EXIST_ENV=100	
 	`), 0666)
 
-	v = GetEnv("EXIST_ENV")
-	assert.Equal(t, v, "100")
+	{
+		v = GetEnv("EXIST_ENV")
+		assert.Equal(t, v, "100")
+
+		v = GetEnv("NOT_EXIST_ENV")
+		assert.Empty(t, v)
+	}
+
+	{
+		v, ok := LookupEnv("EXIST_ENV")
+		assert.Equal(t, v, "100")
+		assert.True(t, ok)
+
+		v, ok = LookupEnv("NOT_EXIST_ENV")
+		assert.Empty(t, v)
+		assert.False(t, ok)
+	}
+
 }
 
 func TestConfigFunctions(t *testing.T) {
-	// 初始化数据库
-	db, _ := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	db, _ := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
 	db.AutoMigrate(&Config{})
 
 	// Test SetValue and GetValue

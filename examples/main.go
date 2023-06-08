@@ -35,6 +35,18 @@ func main() {
 		}
 	}
 
+	// logger with color
+	rabbit.EnabledConsoleColor = true
+	rabbit.Infoln("Server started", "addr", serverAddr)
+
+	// TEST_KEY=100 go run main.go
+	key := rabbit.GetEnv("TEST_KEY")
+	if key != "" {
+		rabbit.Infoln("TEST_KEY", key)
+	} else {
+		rabbit.Errorln("TEST_KEY not found")
+	}
+
 	// db
 	db := rabbit.InitDatabase(dbDriver, dsn, lw)
 
@@ -45,9 +57,9 @@ func main() {
 	// init rabbit
 	rabbit.InitRabbit(db, r)
 
-	// logger with color
-	rabbit.EnabledConsoleColor = true
-	rabbit.Infoln("Server started", "addr", serverAddr)
+	// register handlers
+	ar := r.Group("/api").Use(rabbit.WithAuthentication(), rabbit.WithAuthorization("/api"))
+	rabbit.RegisterAuthorizationHandlers(db, ar)
 
 	r.Run(serverAddr)
 }
