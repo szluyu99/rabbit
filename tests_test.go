@@ -39,6 +39,7 @@ func TestTests(t *testing.T) {
 		var result bool
 		err := c.CallGet("/ping", nil, &result)
 		assert.Nil(t, err)
+		assert.True(t, result)
 	}
 	{
 		w := c.Get("/ping")

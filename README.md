@@ -2,15 +2,25 @@
 
 Rabbit is a golang library for simplifying backend develop.
 
+⭐ Open source project using Rabbit, which can be a reference for an example project:
+- [https://github.com/szluyu99/rabbit-admin](https://github.com/szluyu99/rabbit-admin)
+
 # Features
 
+> All features have corresponding unit tests, which is convenient for developers to learn and use.
+
 ## Dynamic Handlers & Dynamic Gorm Functions
+
+> Reference: [./handler_common_test.go](https://github.com/szluyu99/rabbit/blob/main/handler_common_test.go)
+
+```go
 
 ```go
 func HandleGet[T any](c *gin.Context, db *gorm.DB, onRender onRenderFunc[T])
 func HandleDelete[T any](c *gin.Context, db *gorm.DB, onDelete onDeleteFunc[T]) 
 func HandleCreate[T any](c *gin.Context, db *gorm.DB, onCreate onCreateFunc[T])
 func HandleEdit[T any](c *gin.Context, db *gorm.DB, editables []string, onUpdate onUpdateFunc[T])
+func HandleQuery[T any](c *gin.Context, db *gorm.DB, ctx *QueryOption)
 ```
 
 ```go
@@ -45,6 +55,7 @@ EXIST_ENV=100
 ```
 
 ```bash
+# run with env 
 EXIST_ENV=100 go run .
 ```
 
@@ -86,7 +97,51 @@ boolValue := rabbit.GetBoolValue(db, "bool_key") // true
 
 ## Built-in Handlers
 
-### With authentication module
+### Permission models
+
+```go
+User <-UserRole-> Role
+Role <-RolePermission-> Permission
+User <-GroupMember-> Group
+
+User
+- ID
+- Email
+- Password
+- ...
+
+// for association
+UserRole
+- UserID
+- RoleID
+
+Role
+- Name
+- Label
+
+// for association 
+RolePermission
+- RoleID
+- PermissionID
+
+Permission
+- Name
+- Uri
+- Method
+- Anonymous
+- ParentID  // for tree struct
+- Children  // for tree struct
+
+Group
+- Name
+
+// for association
+GroupMember
+- UserID
+- GroupID
+```
+
+### Authentication handlers
 
 ```go
 RegisterAuthenticationHandlers("/auth", db, r)
@@ -100,7 +155,7 @@ GET    /auth/logout
 POST   /auth/change_password
 ```
 
-### With authorization module
+### Authorization handlers
 
 ```go
 rabbit.RegisterAuthorizationHandlers(db, r.Group("/api"))
@@ -115,7 +170,7 @@ PATCH  /api/permission/:key
 DELETE /api/permission/:key
 ```
 
-### With middleware module
+### Middleware
 
 ```go
 ar := r.Group("/api").Use(
@@ -125,3 +180,96 @@ ar := r.Group("/api").Use(
 
 rabbit.RegisterAuthorizationHandlers(db, ar)
 ```
+
+## Unit Tests Utils
+
+> Reference: [tests_test.go](https://github.com/szluyu99/rabbit/blob/main/tests_test.go)
+
+Example:
+
+```go
+type user struct {
+  ID   uint   `json:"id" gorm:"primarykey"`
+  Name string `json:"name"`
+  Age  int    `json:"age"`
+}
+
+r := gin.Default()
+
+r.GET("/ping", func(ctx *gin.Context) {
+  ctx.JSON(http.StatusOK, true)
+})
+r.POST("/pong", func(ctx *gin.Context) {
+  var form user
+  ctx.BindJSON(&form)
+  ctx.JSON(http.StatusOK, gin.H{
+    "name": form.Name,
+    "age":  form.Age,
+  })
+})
+```
+
+Example Test:
+
+```go
+c := rabbit.NewTestClient(r)
+```
+
+```go
+// CallGet
+{
+  var result bool
+  err := c.CallGet("/ping", nil, &result)
+  assert.Nil(t, err)
+  assert.True(t, result)
+}
+// Get
+{
+  w := c.Get("/ping")
+  assert.Equal(t, http.StatusOK, w.Code)
+  assert.Equal(t, "true", w.Body.String())
+}
+// Native
+{
+  req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+  w := httptest.NewRecorder()
+  r.ServeHTTP(w, req)
+
+  assert.Equal(t, http.StatusOK, w.Code)
+  assert.Equal(t, "true", w.Body.String())
+}
+```
+
+```go
+// CallPost
+{
+  var result map[string]any
+  err := c.CallPost("/pong", user{Name: "test", Age: 11}, &result)
+
+  assert.Nil(t, err)
+  assert.Equal(t, "test", result["name"])
+  assert.Equal(t, float64(11), result["age"])
+}
+// Post
+{
+  b, _ := json.Marshal(user{Name: "test", Age: 11})
+  w := c.Post("/pong", b)
+
+  assert.Equal(t, http.StatusOK, w.Code)
+  assert.Equal(t, `{"age":11,"name":"test"}`, w.Body.String())
+}
+// Native
+{
+  b, _ := json.Marshal(user{Name: "test", Age: 11})
+  req := httptest.NewRequest(http.MethodPost, "/pong", bytes.NewReader(b))
+  w := httptest.NewRecorder()
+  r.ServeHTTP(w, req)
+
+  assert.Equal(t, http.StatusOK, w.Code)
+  assert.Equal(t, `{"age":11,"name":"test"}`, w.Body.String())
+}
+```
+
+# Acknowledgement Project:
+- [https://github.com/restsend/carrot](https://github.com/restsend/carrot)
+- [https://github.com/restsend/gormpher](https://github.com/restsend/gormpher)
