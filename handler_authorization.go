@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/restsend/gormpher"
 	"gorm.io/gorm"
 )
 
@@ -141,5 +142,5 @@ func handleDeletePermission(c *gin.Context) {
 
 func handleEditPermission(c *gin.Context) {
 	db := c.MustGet(DbField).(*gorm.DB)
-	HandleEdit[Permission](c, db, []string{"Name", "Anonymous", "P1", "P2", "P3"}, nil)
+	gormpher.HandleEdit[Permission](c, db, []string{"Name", "Anonymous", "P1", "P2", "P3"}, nil)
 }

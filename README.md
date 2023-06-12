@@ -14,8 +14,6 @@ Rabbit is a golang library for simplifying backend develop.
 > Reference: [./handler_common_test.go](https://github.com/szluyu99/rabbit/blob/main/handler_common_test.go)
 
 ```go
-
-```go
 func HandleGet[T any](c *gin.Context, db *gorm.DB, onRender onRenderFunc[T])
 func HandleDelete[T any](c *gin.Context, db *gorm.DB, onDelete onDeleteFunc[T]) 
 func HandleCreate[T any](c *gin.Context, db *gorm.DB, onCreate onCreateFunc[T])
